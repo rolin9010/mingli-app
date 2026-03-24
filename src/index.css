@@ -1,0 +1,243 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+@source "./src/**/*.{html,js,ts,jsx,tsx}";
+
+@theme {
+  /* 与 body 一致，便于 font-serif 等工具类 */
+  --font-serif: "Noto Serif SC", ui-serif, Georgia, "Songti SC", serif;
+}
+
+/* 中文主字体：Noto Serif SC（Google Fonts 加载 200 / 600 / 700） */
+:root {
+  color-scheme: dark;
+  --mingli-font-body: "Noto Serif SC", "Songti SC", "SimSun", "STSong", "Source Han Serif SC", ui-serif, Georgia, serif;
+  --mingli-font-heading: "Noto Serif SC", "Songti SC", ui-serif, Georgia, serif;
+}
+
+html {
+  /* 与 body 同色，避免橡皮筋滚动露白 */
+  background-color: #050509;
+  height: 100%;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: var(--mingli-font-body);
+  /* Noto Serif SC ExtraLight */
+  font-weight: 200;
+  letter-spacing: 0.02em;
+  color: #e5e7eb;
+  /* 纯深色底 + 繁星：2～3px 光点 + 高密度，1px 在高分屏上几乎看不见 */
+  background-color: #050509;
+  background-attachment: fixed;
+  background-image:
+    radial-gradient(2px 2px at 3% 8%, rgba(255, 255, 255, 0.9), transparent),
+    radial-gradient(2px 2px at 11% 22%, rgba(255, 255, 255, 0.45), transparent),
+    radial-gradient(2.5px 2.5px at 19% 6%, rgba(186, 230, 253, 0.75), transparent),
+    radial-gradient(2px 2px at 27% 38%, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(2px 2px at 35% 14%, rgba(255, 255, 255, 0.55), transparent),
+    radial-gradient(2px 2px at 43% 62%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(3px 3px at 51% 28%, rgba(255, 255, 255, 0.85), transparent),
+    radial-gradient(2px 2px at 58% 72%, rgba(196, 181, 253, 0.55), transparent),
+    radial-gradient(2px 2px at 66% 11%, rgba(255, 255, 255, 0.38), transparent),
+    radial-gradient(2px 2px at 74% 48%, rgba(255, 255, 255, 0.5), transparent),
+    radial-gradient(2.5px 2.5px at 82% 19%, rgba(255, 255, 255, 0.65), transparent),
+    radial-gradient(2px 2px at 90% 56%, rgba(147, 197, 253, 0.5), transparent),
+    radial-gradient(2px 2px at 96% 84%, rgba(255, 255, 255, 0.42), transparent),
+    radial-gradient(2px 2px at 7% 52%, rgba(255, 255, 255, 0.32), transparent),
+    radial-gradient(2px 2px at 15% 78%, rgba(255, 255, 255, 0.48), transparent),
+    radial-gradient(2px 2px at 23% 91%, rgba(192, 132, 252, 0.45), transparent),
+    radial-gradient(2px 2px at 31% 45%, rgba(255, 255, 255, 0.36), transparent),
+    radial-gradient(2.5px 2.5px at 39% 88%, rgba(255, 255, 255, 0.72), transparent),
+    radial-gradient(2px 2px at 47% 5%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(2px 2px at 55% 92%, rgba(255, 255, 255, 0.33), transparent),
+    radial-gradient(2px 2px at 63% 35%, rgba(186, 230, 253, 0.4), transparent),
+    radial-gradient(2px 2px at 71% 66%, rgba(255, 255, 255, 0.44), transparent),
+    radial-gradient(3px 3px at 79% 41%, rgba(255, 255, 255, 0.78), transparent),
+    radial-gradient(2px 2px at 87% 8%, rgba(255, 255, 255, 0.37), transparent),
+    radial-gradient(2px 2px at 94% 33%, rgba(255, 255, 255, 0.52), transparent),
+    radial-gradient(2px 2px at 2% 35%, rgba(255, 255, 255, 0.28), transparent),
+    radial-gradient(2px 2px at 14% 48%, rgba(255, 255, 255, 0.34), transparent),
+    radial-gradient(2px 2px at 26% 15%, rgba(255, 255, 255, 0.3), transparent),
+    radial-gradient(2px 2px at 38% 71%, rgba(255, 255, 255, 0.41), transparent),
+    radial-gradient(2px 2px at 50% 81%, rgba(196, 181, 253, 0.38), transparent),
+    radial-gradient(2px 2px at 62% 58%, rgba(255, 255, 255, 0.36), transparent),
+    radial-gradient(2px 2px at 74% 24%, rgba(255, 255, 255, 0.46), transparent),
+    radial-gradient(2px 2px at 86% 71%, rgba(147, 197, 253, 0.42), transparent),
+    radial-gradient(2px 2px at 98% 12%, rgba(255, 255, 255, 0.4), transparent),
+    radial-gradient(2px 2px at 6% 64%, rgba(255, 255, 255, 0.31), transparent),
+    radial-gradient(2.5px 2.5px at 18% 29%, rgba(255, 255, 255, 0.58), transparent),
+    radial-gradient(2px 2px at 30% 96%, rgba(255, 255, 255, 0.35), transparent),
+    radial-gradient(2px 2px at 42% 52%, rgba(255, 255, 255, 0.33), transparent),
+    radial-gradient(2px 2px at 54% 18%, rgba(255, 255, 255, 0.39), transparent),
+    radial-gradient(2px 2px at 66% 89%, rgba(255, 255, 255, 0.37), transparent),
+    radial-gradient(2px 2px at 78% 3%, rgba(255, 255, 255, 0.32), transparent),
+    radial-gradient(2px 2px at 90% 47%, rgba(255, 255, 255, 0.43), transparent),
+    radial-gradient(2px 2px at 44% 39%, rgba(255, 255, 255, 0.29), transparent),
+    radial-gradient(2px 2px at 69% 77%, rgba(255, 255, 255, 0.34), transparent),
+    radial-gradient(2px 2px at 33% 63%, rgba(186, 230, 253, 0.35), transparent),
+    radial-gradient(2px 2px at 91% 61%, rgba(255, 255, 255, 0.3), transparent);
+}
+
+#root {
+  min-height: 100svh;
+  /* 让页面星场从 body 透出来 */
+  background: transparent;
+}
+
+/* 全局细线边框：默认 border 类由 1px 收至 0.5px；原 border-2 收至 1px，更精致 */
+@layer utilities {
+  .border:not(.border-0) {
+    border-width: 0.5px !important;
+  }
+  .border-x:not(.border-x-0) {
+    border-left-width: 0.5px !important;
+    border-right-width: 0.5px !important;
+  }
+  .border-y:not(.border-y-0) {
+    border-top-width: 0.5px !important;
+    border-bottom-width: 0.5px !important;
+  }
+  .border-t:not(.border-t-0) {
+    border-top-width: 0.5px !important;
+  }
+  .border-r:not(.border-r-0) {
+    border-right-width: 0.5px !important;
+  }
+  .border-b:not(.border-b-0) {
+    border-bottom-width: 0.5px !important;
+  }
+  .border-l:not(.border-l-0) {
+    border-left-width: 0.5px !important;
+  }
+
+  .border-2 {
+    border-width: 1px !important;
+  }
+  .border-x-2 {
+    border-left-width: 1px !important;
+    border-right-width: 1px !important;
+  }
+  .border-y-2 {
+    border-top-width: 1px !important;
+    border-bottom-width: 1px !important;
+  }
+  .border-t-2 {
+    border-top-width: 1px !important;
+  }
+  .border-r-2 {
+    border-right-width: 1px !important;
+  }
+  .border-b-2 {
+    border-bottom-width: 1px !important;
+  }
+  .border-l-2 {
+    border-left-width: 1px !important;
+  }
+
+  .border-0 {
+    border-width: 0 !important;
+  }
+  .border-x-0 {
+    border-left-width: 0 !important;
+    border-right-width: 0 !important;
+  }
+  .border-y-0 {
+    border-top-width: 0 !important;
+    border-bottom-width: 0 !important;
+  }
+  .border-t-0 {
+    border-top-width: 0 !important;
+  }
+  .border-r-0 {
+    border-right-width: 0 !important;
+  }
+  .border-b-0 {
+    border-bottom-width: 0 !important;
+  }
+  .border-l-0 {
+    border-left-width: 0 !important;
+  }
+}
+
+@layer base {
+  .prose {
+    font-family: var(--mingli-font-body);
+  }
+
+  /* 标题：Noto Serif SC SemiBold */
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    font-family: var(--mingli-font-heading);
+    font-weight: 600;
+  }
+
+  /* 文本框：ExtraLight */
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  textarea,
+  select {
+    font-family: var(--mingli-font-body);
+    font-weight: 200;
+  }
+
+  /* 选中态：Bold（与 aria-selected、常见 Tailwind 选中态配合） */
+  [aria-selected="true"],
+  [role="tab"][aria-selected="true"],
+  [role="menuitem"][aria-selected="true"],
+  [role="option"][aria-selected="true"] {
+    font-family: var(--mingli-font-body);
+    font-weight: 700;
+  }
+}
+
+/* 行内高亮：仅作用于专用 span，避免误伤其他类名导致布局异常 */
+mark,
+span.mingli-marker-highlight {
+  display: inline;
+  padding: 0 3px;
+  padding-top: 0;
+  padding-bottom: 0;
+  line-height: inherit;
+  vertical-align: baseline;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+
+/* AI 解读排版修正：强制左对齐、清除 typography 默认 ul/ol 缩进 */
+.ai-report-prose.prose {
+  text-align: left;
+}
+
+.ai-report-prose.prose ul,
+.ai-report-prose.prose ol {
+  padding-inline-start: 0 !important;
+  margin-inline-start: 0 !important;
+  margin-inline-end: 0 !important;
+}
+
+.ai-report-prose.prose ul {
+  list-style: none !important;
+}
+
+.ai-report-prose.prose li {
+  list-style: none !important;
+  margin-left: 0 !important;
+  padding-left: 0 !important;
+}
+
+/* 打印/截图友好：Step 3 用于“可截图分享” */
+@media print {
+  body {
+    background: #fff;
+    color: #111827;
+  }
+}
