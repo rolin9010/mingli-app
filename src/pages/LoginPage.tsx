@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useEffect, useState, type FormEvent } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { AuthError } from '@supabase/supabase-js'
@@ -9,6 +9,23 @@ export default function LoginPage() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>('')
+  const [verifying, setVerifying] = useState(false)
+
+  // 处理邮件验证回调
+  useEffect(() => {
+    const hash = window.location.hash
+    if (hash && hash.includes('access_token')) {
+      setVerifying(true)
+      supabase.auth.getSession().then(({ data }) => {
+        if (data.session) {
+          navigate('/', { replace: true })
+        } else {
+          setVerifying(false)
+          setError('验证链接已失效，请重新登录')
+        }
+      })
+    }
+  }, [navigate])
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
@@ -28,6 +45,14 @@ export default function LoginPage() {
     } finally {
       setLoading(false)
     }
+  }
+
+  if (verifying) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-950 text-sm text-slate-400">
+        正在验证邮箱，请稍候…
+      </div>
+    )
   }
 
   return (
@@ -88,4 +113,3 @@ export default function LoginPage() {
     </div>
   )
 }
-
