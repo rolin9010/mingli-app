@@ -7,10 +7,10 @@ export default function RegisterPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
-
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string>('')
   const [mailSent, setMailSent] = useState(false)
+  const [countdown, setCountdown] = useState(0)
 
   const toFriendlyError = (message: string): string => {
     const m = message.toLowerCase()
@@ -23,15 +23,13 @@ export default function RegisterPage() {
     e.preventDefault()
     if (loading || mailSent) return
     setError('')
-
     if (password !== confirmPassword) {
       setError('两次输入的密码不一致')
       return
     }
-
     setLoading(true)
     try {
-      const { error: authError } = await supabase.auth.signUp({
+      const { data, error: authError } = await supabase.auth.signUp({
         email: email.trim(),
         password,
         options: {
@@ -39,7 +37,18 @@ export default function RegisterPage() {
         },
       })
       if (authError) throw authError
+      if (data.user && data.user.identities && data.user.identities.length === 0) {
+        setError('该邮箱已注册，请直接登录')
+        return
+      }
       setMailSent(true)
+      setCountdown(60)
+      const timer = setInterval(() => {
+        setCountdown((c) => {
+          if (c <= 1) { clearInterval(timer); setMailSent(false); return 0 }
+          return c - 1
+        })
+      }, 1000)
     } catch (err: unknown) {
       const ae = err as AuthError
       setError(toFriendlyError(ae?.message || ''))
@@ -55,7 +64,6 @@ export default function RegisterPage() {
           <div className="text-2xl font-semibold tracking-wide text-amber-100">注册</div>
           <div className="mt-2 text-xs text-slate-400">注册后需要邮箱验证</div>
         </div>
-
         <div className="w-full rounded-2xl border border-amber-400/25 bg-slate-950/90 p-6 shadow-[0_20px_60px_rgba(0,0,0,0.5)] backdrop-blur">
           <form onSubmit={(e) => void handleRegister(e)} className="space-y-4">
             <div>
@@ -99,9 +107,7 @@ export default function RegisterPage() {
                 disabled={mailSent}
               />
             </div>
-
             {error ? <p className="text-center text-xs text-rose-400/95">{error}</p> : null}
-
             <button
               type="submit"
               disabled={loading || mailSent}
@@ -112,16 +118,14 @@ export default function RegisterPage() {
                   : 'border-amber-400/60 bg-amber-400/20 text-amber-100 hover:bg-amber-400/30 disabled:opacity-60',
               ].join(' ')}
             >
-              {mailSent ? '邮件已发送 ✓' : loading ? '发送中...' : '注册'}
+              {mailSent ? `邮件已发送 ✓（${countdown}s 后可重发）` : loading ? '发送中...' : '注册'}
             </button>
-
             {mailSent ? (
               <p className="text-center text-xs text-amber-100/80">
                 验证邮件已发送至 {email.trim()}，请查收邮件并点击确认链接，验证成功后请返回此处用邮箱密码登录。
               </p>
             ) : null}
           </form>
-
           <div className="mt-4 text-center text-xs text-slate-400">
             已有账号？{' '}
             <Link className="font-medium text-amber-100 hover:underline" to="/login">
@@ -133,4 +137,3 @@ export default function RegisterPage() {
     </div>
   )
 }
-
