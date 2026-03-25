@@ -112,9 +112,9 @@ const SYSTEM_PROMPT = `# 角色设定
 export async function fetchAIReading(prompt: string): Promise<string> {
   for (let i = 0; i < 3; i++) {
     try {
-      const res = await fetch('http://localhost:3001', {
+      const res = await fetch('https://api.deepseek.com/chat/completions', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY}` },
         body: JSON.stringify({
           model: 'deepseek-chat',
           messages: [
