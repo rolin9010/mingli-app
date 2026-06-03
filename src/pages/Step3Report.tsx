@@ -1,10 +1,12 @@
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
+import ReactMarkdown from 'react-markdown'
 import {
   AI_READING_SERIF,
   READING_PANEL_SURFACE_STYLE,
-  AiReportMarkdown,
+  aiMarkdownComponents,
   normalizeAiReportMarkdown,
+  parseAiOpeningBlocks,
 } from '../lib/aiReportMarkdown'
 import { fetchAIReading, buildReadingPrompt } from '../lib/ai'
 import {
@@ -16,7 +18,69 @@ import {
 import type { ReportResults, UserInput } from '../lib/types'
 import { Step2ChartsSection } from './Step2Results'
 
-/** 按勾选体系数量估算等待时长，倒计时结束后仍显示「仍在生成」 */
+// ─── Tab 主题定义 ──────────────────────────────────────────────────────────────
+
+const TOPIC_TABS = [
+  { key: 'greeting', label: '开篇', icon: '✦' },
+  { key: 'topic1',   label: '能量画像', icon: '🌊' },
+  { key: 'topic2',   label: '情绪关系', icon: '💫' },
+  { key: 'topic3',   label: '事业方向', icon: '🧭' },
+  { key: 'topic4',   label: '突破行动', icon: '🌙' },
+  { key: 'topic5',   label: '身体养护', icon: '🌿' },
+] as const
+
+type TabKey = (typeof TOPIC_TABS)[number]['key']
+
+/** 将 AI markdown 拆分为开篇 + 五主题 */
+function parseTopics(markdown: string): Record<TabKey, string> {
+  const normalized = normalizeAiReportMarkdown(markdown)
+  const { headerNote, greeting, rest } = parseAiOpeningBlocks(normalized)
+
+  // 开篇 tab：headerNote 小字 + 问候段
+  const greetingParts: string[] = []
+  if (headerNote) greetingParts.push(`*${headerNote}*`)
+  if (greeting) greetingParts.push(greeting)
+  const greetingContent = greetingParts.join('\n\n')
+
+  // 按 ### 主题N: 拆分五个主题
+  const sections: Record<string, string> = {}
+  // 匹配 ### 主题1/一 … ### 主题5/五
+  const chineseNums: Record<string, string> = { '一': '1', '二': '2', '三': '3', '四': '4', '五': '5' }
+
+  // 先尝试按 ### 主题[数字/汉字] 分割
+  const topicRegex = /###\s*主题[一二三四五1-5][：:：]?[^\n]*/g
+  const matches: { index: number; title: string; num: string }[] = []
+
+  let m: RegExpExecArray | null
+  while ((m = topicRegex.exec(rest)) !== null) {
+    // 提取序号
+    const titleText = m[0]
+    const numMatch = titleText.match(/主题([一二三四五1-5])/)
+    if (!numMatch) continue
+    const rawNum = numMatch[1]!
+    const num = chineseNums[rawNum] ?? rawNum
+    matches.push({ index: m.index, title: titleText, num })
+  }
+
+  for (let i = 0; i < matches.length; i++) {
+    const start = matches[i]!.index
+    const end = i + 1 < matches.length ? matches[i + 1]!.index : rest.length
+    const content = rest.slice(start, end).trim()
+    sections[matches[i]!.num] = content
+  }
+
+  return {
+    greeting: greetingContent || '（AI 还未生成开篇内容）',
+    topic1: sections['1'] ?? '',
+    topic2: sections['2'] ?? '',
+    topic3: sections['3'] ?? '',
+    topic4: sections['4'] ?? '',
+    topic5: sections['5'] ?? '',
+  }
+}
+
+// ─── 加载动画 ──────────────────────────────────────────────────────────────────
+
 function AiMasterLoading({ estimatedSeconds }: { estimatedSeconds: number }) {
   const [remain, setRemain] = useState(estimatedSeconds)
   useEffect(() => {
@@ -49,11 +113,13 @@ function AiMasterLoading({ estimatedSeconds }: { estimatedSeconds: number }) {
             <span className="text-amber-200/80">预计时间已到，仍在深度生成中，请稍候…</span>
           )}
         </p>
-        <p className="text-xs leading-relaxed text-slate-400/90">正在结合各种排盘系统进行综合交叉分析...</p>
+        <p className="text-xs leading-relaxed text-slate-400/90">正在结合四柱五行进行深度分析...</p>
       </div>
     </div>
   )
 }
+
+// ─── 小组件 ───────────────────────────────────────────────────────────────────
 
 function Pill({ children }: { children: ReactNode }) {
   return (
@@ -63,6 +129,28 @@ function Pill({ children }: { children: ReactNode }) {
   )
 }
 
+// ─── Tab 内容渲染 ─────────────────────────────────────────────────────────────
+
+function TabContent({ markdown }: { markdown: string }) {
+  if (!markdown || markdown.trim() === '') {
+    return (
+      <p className="py-6 text-center text-sm text-slate-400/80">
+        该主题内容暂未解析到，请尝试重新生成报告。
+      </p>
+    )
+  }
+  return (
+    <div
+      className="prose prose-invert prose-sm ai-report-prose max-w-none leading-relaxed"
+      style={{ fontFamily: AI_READING_SERIF }}
+    >
+      <ReactMarkdown components={aiMarkdownComponents}>{markdown}</ReactMarkdown>
+    </div>
+  )
+}
+
+// ─── 主组件 ───────────────────────────────────────────────────────────────────
+
 export default function Step3Report({
   input,
   results,
@@ -70,10 +158,8 @@ export default function Step3Report({
 }: {
   input: UserInput
   results: ReportResults
-  /** AI 解读成功后的回调（例如保存历史）；错误由调用方自行吞掉 */
   onAIReportComplete?: (aiReport: string) => void | Promise<void>
 }) {
-  /** 同一套测算数据对应同一 key，用于本地缓存 AI 正文（刷新不丢、不重复扣 token） */
   const reportFingerprint = useMemo(() => computeAiReportFingerprint(input), [input])
 
   const [aiContent, setAiContent] = useState(() => getCachedAiReport(computeAiReportFingerprint(input)) ?? '')
@@ -82,8 +168,9 @@ export default function Step3Report({
   )
   const [aiError, setAiError] = useState('')
   const [aiLoadGen, setAiLoadGen] = useState(0)
+  const [activeTab, setActiveTab] = useState<TabKey>('greeting')
 
-  /** 换人或重新排盘后指纹变化：有缓存则直接展示，否则回到「未生成」 */
+  /** 换人/重新排盘后指纹变化 */
   useEffect(() => {
     const cached = getCachedAiReport(reportFingerprint)
     if (cached) {
@@ -95,6 +182,7 @@ export default function Step3Report({
       setAiPhase('idle')
       setAiError('')
     }
+    setActiveTab('greeting')
   }, [reportFingerprint])
 
   useEffect(() => {
@@ -103,29 +191,24 @@ export default function Step3Report({
     const link = document.createElement('link')
     link.id = id
     link.rel = 'stylesheet'
-    link.href =
-      'https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@200;600;700&display=swap'
+    link.href = 'https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@200;600;700&display=swap'
     document.head.appendChild(link)
   }, [])
 
   const isLoading = aiPhase === 'loading'
 
   const aiLoadingEstimateSec = useMemo(() => {
-    const n = input.selectedChartSystems?.length ?? 7
-    return Math.min(100, 22 + n * 9)
-  }, [input.selectedChartSystems])
+    return 45
+  }, [])
 
-  const displayMarkdown = useMemo(() => {
-    if (aiPhase !== 'done' || !aiContent) return ''
-    return normalizeAiReportMarkdown(aiContent)
-  }, [aiPhase, aiContent])
+  /** 按主题拆分 */
+  const topics = useMemo(() => {
+    if (!aiContent) return null
+    return parseTopics(aiContent)
+  }, [aiContent])
 
-  /**
-   * @param force 为 true 时表示「重新生成」：不走本地缓存，必须请求 API
-   */
   const startAiReading = async (options?: { force?: boolean }) => {
     const force = options?.force === true
-
     if (!force) {
       const cached = getCachedAiReport(reportFingerprint)
       if (cached) {
@@ -137,7 +220,6 @@ export default function Step3Report({
     } else {
       clearCachedAiReport(reportFingerprint)
     }
-
     setAiLoadGen((g) => g + 1)
     setAiPhase('loading')
     setAiError('')
@@ -147,12 +229,11 @@ export default function Step3Report({
       const text = await fetchAIReading(prompt)
       setAiContent(text)
       setAiPhase('done')
+      setActiveTab('greeting')
       setCachedAiReport(reportFingerprint, text)
       try {
         await onAIReportComplete?.(text)
-      } catch {
-        /* 静默失败 */
-      }
+      } catch { /* 静默失败 */ }
     } catch (e: unknown) {
       setAiError(e instanceof Error ? e.message : '解读失败，请重试')
       setAiPhase('error')
@@ -163,12 +244,10 @@ export default function Step3Report({
     <div className="rounded-2xl border border-amber-400/25 bg-white/[0.04] p-6 shadow-[0_0_0_0.5px_rgba(251,191,36,0.06)]">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="text-xs text-slate-200/80">命理综合解读报告</div>
+          <div className="text-xs text-slate-200/80">四柱八字·五行能量解读报告</div>
           <div className="mt-2 text-2xl font-semibold tracking-wide text-amber-100 sm:text-3xl">{input.name}</div>
           <div className="mt-2 flex flex-wrap gap-2">
             <Pill>性别：{input.gender}</Pill>
-            {input.selectedChartSystems?.includes('血型') ? <Pill>血型：{input.bloodType}</Pill> : null}
-            {input.selectedChartSystems?.includes('MBTI') && input.mbti ? <Pill>MBTI：{input.mbti}</Pill> : null}
           </div>
         </div>
         <div className="text-left text-sm text-slate-200/80 sm:text-right">
@@ -189,12 +268,13 @@ export default function Step3Report({
           <Step2ChartsSection input={input} results={results} />
         </div>
 
-        {/* 与 Step2ChartsSection 同宽：整块大卡片 max-w-3xl 居中 */}
+        {/* AI 解读区 */}
         <div className="mx-auto w-full max-w-3xl">
           <div className="rounded-3xl border border-amber-400/25 bg-amber-400/[0.06] p-6">
             <div className="space-y-5">
               {reportCover}
 
+              {/* idle: 未生成 */}
               {aiPhase === 'idle' ? (
                 <div className="flex flex-col items-center justify-center py-12">
                   <button
@@ -206,9 +286,13 @@ export default function Step3Report({
                   </button>
                 </div>
               ) : null}
+
+              {/* loading */}
               {isLoading ? (
                 <AiMasterLoading key={aiLoadGen} estimatedSeconds={aiLoadingEstimateSec} />
               ) : null}
+
+              {/* error */}
               {aiPhase === 'error' ? (
                 <div className="rounded-xl border border-rose-400/25 bg-rose-400/10 p-4 text-sm text-rose-200">
                   {aiError}
@@ -221,30 +305,45 @@ export default function Step3Report({
                   </button>
                 </div>
               ) : null}
-              {aiPhase === 'done' && aiContent ? (
-                <>
-                  <div
-                    className="prose prose-invert prose-sm ai-report-prose max-w-none leading-relaxed rounded-2xl border border-amber-900/35 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.06)] sm:p-7"
-                    style={{
-                      fontFamily: AI_READING_SERIF,
-                      ...READING_PANEL_SURFACE_STYLE,
-                    }}
-                  >
-                    <AiReportMarkdown markdown={displayMarkdown || aiContent} />
+
+              {/* done: Tab 切换展示 */}
+              {aiPhase === 'done' && topics ? (
+                <div>
+                  {/* Tab 栏 */}
+                  <div className="mb-1 flex overflow-x-auto [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+                    <div className="flex min-w-max gap-1.5 pb-2">
+                      {TOPIC_TABS.map((tab) => {
+                        const isActive = activeTab === tab.key
+                        return (
+                          <button
+                            key={tab.key}
+                            type="button"
+                            onClick={() => setActiveTab(tab.key)}
+                            className={[
+                              'flex shrink-0 items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-medium transition-all',
+                              isActive
+                                ? 'border-amber-400/70 bg-amber-400/20 text-amber-100 shadow-[inset_0_1px_0_rgba(251,191,36,0.15)]'
+                                : 'border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20 hover:text-slate-200',
+                            ].join(' ')}
+                          >
+                            <span className="text-[13px] leading-none">{tab.icon}</span>
+                            <span>{tab.label}</span>
+                          </button>
+                        )
+                      })}
+                    </div>
                   </div>
 
-                  <div className="mt-6 flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setAiPhase('idle')
-                        setAiContent('')
-                        setAiError('')
-                      }}
-                      className="rounded-xl border border-white/15 bg-white/5 px-4 py-2 text-xs font-medium text-slate-200 hover:border-white/25"
-                    >
-                      收起解读
-                    </button>
+                  {/* Tab 内容 */}
+                  <div
+                    className="rounded-2xl border border-amber-900/35 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.06)] sm:p-6"
+                    style={READING_PANEL_SURFACE_STYLE}
+                  >
+                    <TabContent markdown={topics[activeTab]} />
+                  </div>
+
+                  {/* 底部操作按钮 */}
+                  <div className="mt-4 flex flex-wrap gap-3">
                     <button
                       type="button"
                       onClick={() => void startAiReading({ force: true })}
@@ -253,7 +352,7 @@ export default function Step3Report({
                       重新生成
                     </button>
                   </div>
-                </>
+                </div>
               ) : null}
 
               <p className="mt-6 border-t border-white/10 pt-4 text-xs leading-6 text-slate-100/70">

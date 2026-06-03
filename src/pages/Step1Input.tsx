@@ -3,7 +3,7 @@ import type { BirthDateInput, BloodType, Gender, MBTI, UserInput } from '../lib/
 import { hasBirthLocationForTrueSolar } from '../lib/geo'
 import Card from '../components/Card'
 import FormField from '../components/FormField'
-import { IconBookOpen, IconCompass, IconMoonStars, IconSparkle, IconSun, IconUserBust } from '../components/icons'
+import { IconMoonStars, IconSparkle, IconSun } from '../components/icons'
 
 /**
  * 可选排盘体系；与 Step2 `switch (sysKey)` 对齐。
@@ -11,13 +11,6 @@ import { IconBookOpen, IconCompass, IconMoonStars, IconSparkle, IconSun, IconUse
  */
 const CHART_SYSTEMS = [
   { key: '八字', label: '四柱八字', defaultSelected: true },
-  { key: '紫微', label: '紫微斗数', defaultSelected: true },
-  { key: 'MBTI', label: 'MBTI', defaultSelected: false },
-  { key: '人类图', label: '人类图', defaultSelected: true },
-  { key: '太阳星座', label: '西洋占星', defaultSelected: false },
-  { key: '生命灵数', label: '生命灵数', defaultSelected: false },
-  { key: '塔罗', label: '塔罗', defaultSelected: false },
-  { key: '血型', label: '血型', defaultSelected: false },
 ] as const
 
 const ALL_CHART_SYSTEM_KEYS: string[] = CHART_SYSTEMS.map((s) => s.key)
@@ -619,16 +612,6 @@ export default function Step1Input({
 
   const derivedMbti = `${mbtiDimensions.ei}${mbtiDimensions.sn}${mbtiDimensions.tf}${mbtiDimensions.jp}` as MBTI
 
-  const toggleChartSystem = (key: string) => {
-    setSelectedChartSystems((prev) => {
-      if (prev.includes(key)) {
-        if (prev.length <= 1) return prev
-        return prev.filter((k) => k !== key)
-      }
-      return [...prev, key]
-    })
-  }
-
   const validation = useMemo(() => {
     const nameOk = name.trim().length >= 2 && name.trim().length <= 20
     const birthOk = isValidDate(birth) && birth.hour >= 0 && birth.hour <= 23
@@ -728,47 +711,12 @@ export default function Step1Input({
             深度自我探索工具
           </p>
           <p className="mx-auto mt-3 max-w-2xl px-1 text-center text-xs leading-relaxed text-slate-200/80 sm:mt-4 sm:text-sm">
-            融合多种分析工具，帮你洞察自己的个性和天赋（娱乐参考，不构成任何建议）
+            帮你结合五行能量，深入分析和洞察自己的个性和天赋（娱乐参考，不构成任何建议）
           </p>
-          <p className="mt-5 text-sm font-medium text-amber-100/85">
-            <span className="mr-1.5 opacity-90">✨</span>
-            排盘系统选择：
-          </p>
-          <div className="mt-3 grid grid-cols-2 gap-2.5 sm:grid-cols-4 sm:gap-3">
-            {CHART_SYSTEMS.map(({ key, label }) => {
-              const on = selectedChartSystems.includes(key)
-              return (
-                <button
-                  key={key}
-                  type="button"
-                  onClick={() => toggleChartSystem(key)}
-                  className={[
-                    'flex w-full items-center justify-between gap-2 rounded-full border px-3 py-2.5 text-left text-xs transition sm:text-[13px]',
-                    on
-                      ? 'border-amber-400/50 bg-amber-400/15 text-amber-50 shadow-[inset_0_1px_0_rgba(251,191,36,0.12)] font-bold'
-                      : 'border-white/15 bg-white/[0.04] text-slate-400 hover:border-white/25 hover:text-slate-300 font-medium',
-                  ].join(' ')}
-                >
-                  <span className="min-w-0 flex-1 leading-snug">{label}</span>
-                  <span
-                    className={[
-                      'flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-[10px]',
-                      on
-                        ? 'border-amber-400/40 bg-amber-400/20 text-amber-100'
-                        : 'border-white/10 bg-transparent text-transparent',
-                    ].join(' ')}
-                    aria-hidden
-                  >
-                    ✓
-                  </span>
-                </button>
-              )
-            })}
-          </div>
         </div>
 
-        <div className="grid gap-5 lg:grid-cols-5">
-          <div className="lg:col-span-3">
+        <div className="grid gap-5">
+          <div>
             <Card
               icon={<IconSparkle className="h-6 w-6" />}
               title="填写个人信息"
@@ -817,9 +765,8 @@ export default function Step1Input({
                     <span className="text-slate-400 text-xs">▾ 选择</span>
                   </button>
                   <div className="mt-3 rounded-xl border border-amber-400/15 bg-amber-400/5 px-3 py-2 text-xs leading-5 text-slate-200/80">
-                    八字/紫微时辰：请在「出生地」中勾选<strong className="text-amber-100/90">真太阳时</strong>并选到具体城市后，才按经度校正；关闭勾选则只用国家维度、以钟表时间排盘（例如仅「中国」时多为东八区中心经度，与西安等地会有时辰差异）。
+                    八字时辰：请在「出生地」中勾选<strong className="text-amber-100/90">真太阳时</strong>并选到具体城市后，才按经度校正；关闭勾选则只用国家维度、以钟表时间排盘（例如仅「中国」时多为东八区中心经度，与西安等地会有时辰差异）。
                   </div>
-                  <div className="mt-2 text-xs text-slate-200/60">精确分钟用于西洋星盘与紫微斗数计算。</div>
                 </Card>
 
                 {/* 出生地 — 选择器入口 */}
@@ -889,9 +836,6 @@ export default function Step1Input({
                       />
                     </div>
                   )}
-                  <div className="mt-2 text-xs text-slate-200/60">
-                    西洋星盘仍使用国家/城市估算经纬（与八字真太阳时开关独立）。
-                  </div>
                 </Card>
 
                 {/* 血型 */}
@@ -1030,56 +974,6 @@ export default function Step1Input({
             </Card>
           </div>
 
-          <div className="lg:col-span-2">
-            <div className="grid gap-4">
-              <Card icon={<IconSun className="h-6 w-6" />} title="您将获得">
-                <div className="flex flex-col gap-6 sm:gap-7">
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <div
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-amber-400/35 bg-amber-100/[0.12] sm:h-14 sm:w-14"
-                      aria-hidden
-                    >
-                      <IconCompass className="h-5 w-5 text-amber-400/95 sm:h-6 sm:w-6" strokeWidth={1.5} />
-                    </div>
-                    <div className="min-w-0 leading-snug">
-                      <div className="text-[15px] font-semibold tracking-wide text-slate-100/95 sm:text-base">
-                        精准排盘
-                      </div>
-                      <div className="mt-1 text-xs text-slate-400/90 sm:text-sm">多体系算法</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <div
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-amber-400/35 bg-amber-100/[0.12] sm:h-14 sm:w-14"
-                      aria-hidden
-                    >
-                      <IconBookOpen className="h-5 w-5 text-amber-400/95 sm:h-6 sm:w-6" strokeWidth={1.5} />
-                    </div>
-                    <div className="min-w-0 leading-snug">
-                      <div className="text-[15px] font-semibold tracking-wide text-slate-100/95 sm:text-base">
-                        AI 深度解读
-                      </div>
-                      <div className="mt-1 text-xs text-slate-400/90 sm:text-sm">智能命理分析</div>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-3 sm:gap-4">
-                    <div
-                      className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full border border-amber-400/35 bg-amber-100/[0.12] sm:h-14 sm:w-14"
-                      aria-hidden
-                    >
-                      <IconUserBust className="h-5 w-5 text-amber-400/95 sm:h-6 sm:w-6" strokeWidth={1.5} />
-                    </div>
-                    <div className="min-w-0 leading-snug">
-                      <div className="text-[15px] font-semibold tracking-wide text-slate-100/95 sm:text-base">
-                        资深大师咨询
-                      </div>
-                      <div className="mt-1 text-xs text-slate-400/90 sm:text-sm">名师在线指点</div>
-                    </div>
-                  </div>
-                </div>
-              </Card>
-            </div>
-          </div>
         </div>
       </div>
     </>

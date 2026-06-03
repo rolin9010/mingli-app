@@ -40,7 +40,6 @@ function baziLocationFromInput(input: UserInput) {
 
 export function computeAll(input: UserInput): ReportResults {
   const lifeNumber = calcLifeNumber(input.birth)
-  const solar = calcSolarSign(input.birth)
   const blood = calcBloodType(input.bloodType ?? 'O')
   const mbti = calcMbti(input.mbti ?? 'INTJ')
   const baziLoc = baziLocationFromInput(input)
@@ -56,12 +55,14 @@ export function computeAll(input: UserInput): ReportResults {
     `${input.name}|${input.gender}`,
   )
 
-  const { year: solarYear, month: solarMonth, day: solarDay, hour: solarHour, minute: solarMinute } =
-    baziCtx.gregorian
+  const { hour: solarHour, minute: solarMinute } = baziCtx.gregorian
   const ziwei = calcZiwei(
-    solarYear,
-    solarMonth,
-    solarDay,
+    // Ziwei：若用户输入为「农历」，则必须按农历排；否则按公历排。
+    // 注意：baziCtx.gregorian 的 year/month/day 在「农历」模式下会被换算成阳历，
+    // 因此这里必须使用用户输入的 year/month/day 作为 ziwei 的日期参数。
+    input.birth.year,
+    input.birth.month,
+    input.birth.day,
     solarHour,
     input.gender,
     input.calendarType === '农历',
@@ -70,6 +71,13 @@ export function computeAll(input: UserInput): ReportResults {
 
   const geo = lookupGeo(input.country, input.city)
   const westernGreg = gregorianWallClockForWestern(input.birth, input.calendarType)
+  const solar = calcSolarSign({
+    year: westernGreg.year,
+    month: westernGreg.month,
+    day: westernGreg.day,
+    hour: westernGreg.hour,
+    minute: westernGreg.minute,
+  })
   const tz = geo?.tz ?? 8
   const astro = calcAstro(
     {

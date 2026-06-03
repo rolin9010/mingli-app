@@ -78,9 +78,9 @@ export function parseAiOpeningBlocks(full: string): {
     greeting = greeting.replace(/\n+/g, ' ')
   }
 
-  // 如果模型没有按 [GREETING] 标签输出，则尝试把 HEADER_NOTE 后、第一个「##」前的首段当作问候段
+  // 如果模型没有按 [GREETING] 标签输出，则尝试把 HEADER_NOTE 后、第一个「## 或 ###」前的首段当作问候段
   if (!greeting && !taglineLegacy) {
-    const firstSectionIdx = s.search(/\n##\s+/)
+    const firstSectionIdx = s.search(/\n#{2,3}\s+/)
     if (firstSectionIdx !== -1) {
       const maybeGreeting = s.slice(0, firstSectionIdx).trim()
       if (maybeGreeting) {
