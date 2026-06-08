@@ -3,7 +3,7 @@ import type { BirthDateInput, BloodType, Gender, MBTI, UserInput } from '../lib/
 import { hasBirthLocationForTrueSolar } from '../lib/geo'
 import Card from '../components/Card'
 import FormField from '../components/FormField'
-import { IconMoonStars, IconSparkle, IconSun } from '../components/icons'
+import { IconSparkle } from '../components/icons'
 
 /**
  * 可选排盘体系；与 Step2 `switch (sysKey)` 对齐。
@@ -705,13 +705,13 @@ export default function Step1Input({
         />
       )}
 
-      <div className="mx-auto max-w-5xl px-4 pb-12 pt-8">
-        <div className="mb-8 rounded-2xl border border-amber-400/20 bg-white/[0.03] px-4 py-6 sm:px-6">
-          <p className="text-center font-serif text-2xl font-semibold tracking-wide text-amber-200/95 sm:text-3xl md:text-4xl">
+      <div className="mx-auto max-w-lg px-4 pb-12 pt-8">
+        <div className="mb-6 rounded-2xl border border-amber-400/20 bg-white/[0.03] px-4 py-5 sm:px-6">
+          <p className="text-center font-serif text-2xl font-semibold tracking-wide text-amber-200/95 sm:text-3xl">
             深度自我探索工具
           </p>
-          <p className="mx-auto mt-3 max-w-2xl px-1 text-center text-xs leading-relaxed text-slate-200/80 sm:mt-4 sm:text-sm">
-            帮你结合五行能量，深入分析和洞察自己的个性和天赋（娱乐参考，不构成任何建议）
+          <p className="mx-auto mt-2 px-1 text-center text-xs leading-relaxed text-slate-200/70">
+            五行能量分析 · 娱乐参考，不构成任何建议
           </p>
         </div>
 
@@ -722,121 +722,86 @@ export default function Step1Input({
               title="填写个人信息"
               headerRight={showLastInputHint ? '✓ 已自动填入上次的信息' : null}
             >
-              <div className="grid gap-4">
+              <div className="grid gap-3">
 
-                {/* 姓名 */}
-                <FormField label="姓名">
-                  <input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：林明"
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-200/40 focus:border-amber-400/40" />
-                </FormField>
-
-                {/* 性别 */}
-                <FormField label="性别">
-                  <div className="flex gap-3">
-                    {genderOptions.map((g) => (
-                      <button key={g} type="button" onClick={() => setGender(g)}
-                        className={['flex-1 rounded-xl border px-3 py-2 text-sm transition', gender === g ? 'border-amber-400/50 bg-amber-400/15 text-amber-100' : 'border-white/10 bg-white/5 text-slate-100 hover:border-white/20'].join(' ')}>
-                        {g}
-                      </button>
-                    ))}
+                {/* 姓名 + 性别 同行 */}
+                <div className="flex gap-2">
+                  <div className="flex-1">
+                    <div className="mb-1 text-xs text-slate-300/70">姓名</div>
+                    <input value={name} onChange={(e) => setName(e.target.value)} placeholder="例如：林明"
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-sm text-slate-100 outline-none placeholder:text-slate-200/40 focus:border-amber-400/40" />
                   </div>
-                </FormField>
-
-                {/* 起盘方式 */}
-                <FormField label="起盘方式">
-                  <div className="flex gap-3">
-                    {(['公历', '农历'] as const).map((t) => (
-                      <button key={t} type="button" onClick={() => setCalendarType(t)}
-                        className={['flex-1 rounded-xl border px-3 py-2 text-sm transition', calendarType === t ? 'border-amber-400/50 bg-amber-400/15 text-amber-100' : 'border-white/10 bg-white/5 text-slate-100 hover:border-white/20'].join(' ')}>
-                        {t}排盘
-                      </button>
-                    ))}
+                  <div className="shrink-0">
+                    <div className="mb-1 text-xs text-slate-300/70">性别</div>
+                    <div className="flex gap-1.5">
+                      {genderOptions.map((g) => (
+                        <button key={g} type="button" onClick={() => setGender(g)}
+                          className={['rounded-xl border px-3.5 py-2 text-sm transition', gender === g ? 'border-amber-400/50 bg-amber-400/15 text-amber-100' : 'border-white/10 bg-white/5 text-slate-100 hover:border-white/20'].join(' ')}>
+                          {g}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </FormField>
+                </div>
 
-                {/* 出生时间 — 选择器入口 */}
-                <Card icon={<IconMoonStars className="h-6 w-6" />} title="出生日期与时间">
-                  <button
-                    type="button"
-                    onClick={() => setShowTimePicker(true)}
-                    className="w-full rounded-xl border border-white/10 bg-white/5 px-4 py-3 text-left text-sm text-slate-100 hover:border-amber-400/30 hover:bg-white/10 transition flex items-center justify-between"
-                  >
-                    <span>{formatBirth(birth)}</span>
-                    <span className="text-slate-400 text-xs">▾ 选择</span>
-                  </button>
-                  <div className="mt-3 rounded-xl border border-amber-400/15 bg-amber-400/5 px-3 py-2 text-xs leading-5 text-slate-200/80">
-                    八字时辰：请在「出生地」中勾选<strong className="text-amber-100/90">真太阳时</strong>并选到具体城市后，才按经度校正；关闭勾选则只用国家维度、以钟表时间排盘（例如仅「中国」时多为东八区中心经度，与西安等地会有时辰差异）。
+                {/* 起盘方式 + 出生时间 同行 */}
+                <div className="flex gap-2">
+                  <div className="shrink-0">
+                    <div className="mb-1 text-xs text-slate-300/70">历法</div>
+                    <div className="flex gap-1.5">
+                      {(['公历', '农历'] as const).map((t) => (
+                        <button key={t} type="button" onClick={() => setCalendarType(t)}
+                          className={['rounded-xl border px-2.5 py-2 text-xs transition', calendarType === t ? 'border-amber-400/50 bg-amber-400/15 text-amber-100' : 'border-white/10 bg-white/5 text-slate-100 hover:border-white/20'].join(' ')}>
+                          {t}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                </Card>
-
-                {/* 出生地 — 选择器入口 */}
-                <Card icon={<IconSun className="h-6 w-6" />} title="出生地">
-                  {/* 国家选择（不是中国时显示文本输入） */}
-                  <FormField label="国家">
-                    <select value={country} onChange={(e) => setCountry(e.target.value)}
-                      className="w-full rounded-xl border border-white/10 bg-slate-900 px-3 py-2 text-sm text-slate-100 outline-none focus:border-amber-400/40">
-                      {countries.map((c) => <option key={c} value={c}>{c}</option>)}
-                    </select>
-                  </FormField>
-
-                  <label className="mt-3 flex cursor-pointer items-start gap-2.5 rounded-xl border border-white/10 bg-white/[0.04] px-3 py-2.5 text-sm text-slate-100">
-                    <input
-                      type="checkbox"
-                      checked={useSolarTime}
-                      onChange={(e) => {
-                        const on = e.target.checked
-                        setUseSolarTime(on)
-                        if (!on) {
-                          setProvince('')
-                          setCity('')
-                          setDistrict('')
-                        }
-                      }}
-                      className="mt-0.5 h-4 w-4 shrink-0 rounded border-white/20 bg-slate-900 text-amber-500 focus:ring-amber-400/40"
-                    />
-                    <span className="min-w-0 leading-snug">
-                      <span className="font-medium text-amber-100/90">使用真太阳时</span>
-                      <span className="mt-0.5 block text-xs font-normal text-slate-400">
-                        勾选后可填写具体城市；八字/紫微将按该地经度校正时辰。
-                        <strong className="text-slate-300">取消勾选会清空省/市/区（或海外城市）</strong>，仅按国家粗略时区、以您输入的钟表时间排盘。
-                      </span>
-                    </span>
-                  </label>
-
-                  {country === '中国' ? (
+                  <div className="flex-1">
+                    <div className="mb-1 text-xs text-slate-300/70">出生时间</div>
                     <button
                       type="button"
-                      disabled={!useSolarTime}
-                      onClick={() => useSolarTime && setShowLocationPicker(true)}
-                      title={!useSolarTime ? '请先勾选「使用真太阳时」再选择省市区' : undefined}
-                      className={[
-                        'mt-3 w-full rounded-xl border px-4 py-3 text-left text-sm transition flex items-center justify-between',
-                        useSolarTime
-                          ? 'border-white/10 bg-white/5 text-slate-100 hover:border-amber-400/30 hover:bg-white/10'
-                          : 'cursor-not-allowed border-white/5 bg-white/[0.02] text-slate-500',
-                      ].join(' ')}
+                      onClick={() => setShowTimePicker(true)}
+                      className="w-full rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-slate-100 hover:border-amber-400/30 hover:bg-white/10 transition flex items-center justify-between"
                     >
-                      <span>{useSolarTime ? formatLocation(province, city, district) : '未选择具体城市（仅国家 · 钟表时间排盘）'}</span>
-                      <span className="text-slate-400 text-xs">{useSolarTime ? '▾ 选择' : '—'}</span>
+                      <span>{formatBirth(birth)}</span>
+                      <span className="ml-1 shrink-0 text-slate-400">▾</span>
                     </button>
-                  ) : (
-                    <div className="mt-3">
-                      <div className="mb-2 text-xs text-amber-100/80">城市（用于真太阳时经纬度）</div>
+                  </div>
+                </div>
+
+                {/* 出生地 — 国家 + 省市区/城市 */}
+                <div>
+                  <div className="mb-1 text-xs text-slate-300/70">出生地</div>
+                  <div className="flex gap-2">
+                    <select value={country} onChange={(e) => setCountry(e.target.value)}
+                      className="w-[5.5rem] shrink-0 rounded-xl border border-white/10 bg-slate-900 px-2 py-2 text-xs text-slate-100 outline-none focus:border-amber-400/40">
+                      {countries.map((c) => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                    {country === '中国' ? (
+                      <button
+                        type="button"
+                        onClick={() => { setUseSolarTime(true); setShowLocationPicker(true) }}
+                        className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-left text-xs text-slate-100 hover:border-amber-400/30 hover:bg-white/10 transition flex items-center justify-between"
+                      >
+                        <span className={province ? 'text-slate-100' : 'text-slate-400'}>
+                          {province ? formatLocation(province, city, district) : '省 / 市 / 区（选填）'}
+                        </span>
+                        <span className="ml-1 shrink-0 text-slate-400">▾</span>
+                      </button>
+                    ) : (
                       <input
                         value={city}
                         onChange={(e) => setCity(e.target.value)}
-                        disabled={!useSolarTime}
-                        placeholder={useSolarTime ? '请输入城市名（须与内置城市表匹配才校正）' : '请先勾选「使用真太阳时」'}
-                        className={[
-                          'w-full rounded-xl border px-3 py-2 text-sm outline-none placeholder:text-slate-200/40',
-                          useSolarTime
-                            ? 'border-white/10 bg-white/5 text-slate-100 focus:border-amber-400/40'
-                            : 'cursor-not-allowed border-white/5 bg-white/[0.02] text-slate-500',
-                        ].join(' ')}
+                        placeholder="城市名（选填）"
+                        className="flex-1 rounded-xl border border-white/10 bg-white/5 px-3 py-2 text-xs text-slate-100 outline-none placeholder:text-slate-200/40 focus:border-amber-400/40"
                       />
-                    </div>
-                  )}
-                </Card>
+                    )}
+                  </div>
+                  <p className="mt-1.5 text-[11px] leading-4 text-slate-400/80">
+                    填写具体城市后八字将按经度校正时辰；不填则以国家时区排盘。
+                  </p>
+                </div>
 
                 {/* 血型 */}
                 {bloodSystemSelected ? (
@@ -954,8 +919,8 @@ export default function Step1Input({
                   </div>
                 )}
 
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-                  <div className="text-xs text-slate-200/70">输入仅在浏览器本地计算，不上传到服务器。</div>
+                <div className="flex items-center justify-between gap-3">
+                  <div className="text-xs text-slate-200/50">输入仅本地计算，不上传。</div>
                   <button
                     type="button"
                     onClick={next}

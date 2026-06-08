@@ -125,3 +125,20 @@ astro: AstroResult
 humanDesign: HumanDesignResult
 ziwei?: ZiweiResult
 }
+
+// ── 合盘类型 ──────────────────────────────────────────────────────
+
+export type HeBanRelationType = '情侣' | '夫妻' | '亲子' | '朋友' | '事业合伙'
+
+/** 合盘输入：双方信息 + 关系类型 */
+export type HeBanUserInput = {
+  personA: UserInput
+  personB: UserInput
+  relation: HeBanRelationType
+}
+
+/** 合盘计算结果：双方各自的测算结果 */
+export type HeBanResults = {
+  resultA: ReportResults
+  resultB: ReportResults
+}

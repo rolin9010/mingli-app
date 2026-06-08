@@ -6,16 +6,19 @@ import { saveReading } from './lib/history'
 import { supabase } from './lib/supabase'
 import { clearWizardSnapshot, loadWizardSnapshot, saveWizardSnapshot } from './lib/wizardSession'
 import Step1Input from './pages/Step1Input'
+import HeBanInputPage from './pages/HeBanInputPage'
 import AuthPage from './pages/AuthPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import HistoryPage from './pages/HistoryPage'
-import type { ReportResults, UserInput } from './lib/types'
+import type { HeBanResults, HeBanUserInput, ReportResults, UserInput } from './lib/types'
 import PrivateRoute from './components/PrivateRoute'
 
 const Step3Report = lazy(() => import('./pages/Step3Report'))
+const HeBanReport = lazy(() => import('./pages/HeBanReport'))
 
 type Step = 1 | 2
+type AppMode = 'single' | 'heban'
 
 function StepLoading() {
   return (
@@ -42,11 +45,18 @@ function nicknameOf(user: User | null): string {
 
 function WizardApp({ user }: { user: User | null }) {
   const w0 = loadWizardSnapshot()
+  const [mode, setMode] = useState<AppMode>('single')
   const [step, setStep] = useState<Step>(w0.step === 2 ? 2 : 1)
   const [input, setInput] = useState<UserInput | null>(w0.input)
   const [results, setResults] = useState<ReportResults | null>(w0.results)
   const [isComputing, setIsComputing] = useState(false)
   const [step1Key, setStep1Key] = useState(0)
+
+  // 合盘状态
+  const [heBanStep, setHeBanStep] = useState<1 | 2>(1)
+  const [heBanInput, setHeBanInput] = useState<HeBanUserInput | null>(null)
+  const [heBanResults, setHeBanResults] = useState<HeBanResults | null>(null)
+  const [isHeBanComputing, setIsHeBanComputing] = useState(false)
 
   const [showAuth, setShowAuth] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
@@ -57,6 +67,19 @@ function WizardApp({ user }: { user: User | null }) {
       saveWizardSnapshot(2, input, results)
     }
   }, [step, input, results])
+
+  const switchMode = (newMode: AppMode) => {
+    setMode(newMode)
+    if (newMode === 'single') {
+      setHeBanStep(1)
+      setHeBanInput(null)
+      setHeBanResults(null)
+    } else {
+      setStep1Key((k) => k + 1)
+      setStep(1)
+      clearWizardSnapshot()
+    }
+  }
 
   if (showHistory) {
     return (
@@ -85,59 +108,143 @@ function WizardApp({ user }: { user: User | null }) {
       />
       {showAuth ? <AuthModal onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} /> : null}
 
-      {step === 1 && (
-        <Step1Input
-          key={step1Key}
-          initialValues={step1Key > 0 ? input : null}
-          isSubmitting={isComputing}
-          onNext={async (data) => {
-            if (isComputing) return
-            setIsComputing(true)
-            try {
-              const { computeAll } = await import('./lib/mingli/computeReport')
-              const res = computeAll(data)
-              setInput(data)
-              setResults(res)
-              setStep(2)
-              saveWizardSnapshot(2, data, res)
-            } finally {
-              setIsComputing(false)
-            }
-          }}
-        />
+      {/* ── 模式切换 Tab（仅在首页/输入页显示） ── */}
+      {((mode === 'single' && step === 1) || (mode === 'heban' && heBanStep === 1)) && (
+        <div className="mx-auto max-w-lg px-4 pt-5">
+          <div className="flex gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-1.5">
+            <button
+              type="button"
+              onClick={() => switchMode('single')}
+              className={[
+                'flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition',
+                mode === 'single'
+                  ? 'bg-amber-400/20 border border-amber-400/50 text-amber-100'
+                  : 'text-slate-400 hover:text-slate-200',
+              ].join(' ')}
+            >
+              ✦ 单人测算
+            </button>
+            <button
+              type="button"
+              onClick={() => switchMode('heban')}
+              className={[
+                'flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition',
+                mode === 'heban'
+                  ? 'bg-amber-400/20 border border-amber-400/50 text-amber-100'
+                  : 'text-slate-400 hover:text-slate-200',
+              ].join(' ')}
+            >
+              ☯ 合盘
+            </button>
+          </div>
+        </div>
       )}
 
-      {step === 2 && input && results && (
-        <Suspense fallback={<StepLoading />}>
-          <>
-            <div className="mx-auto max-w-6xl px-4">
-              <div className="mt-2 flex items-center justify-start gap-3">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setStep1Key((k) => k + 1)
-                    setStep(1)
-                    clearWizardSnapshot()
-                  }}
-                  className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 hover:border-white/20"
-                >
-                  返回修改
-                </button>
-              </div>
-            </div>
-            <Step3Report
-              input={input}
-              results={results}
-              onAIReportComplete={async (aiReport) => {
+      {/* ── 单人测算流程 ── */}
+      {mode === 'single' && (
+        <>
+          {step === 1 && (
+            <Step1Input
+              key={step1Key}
+              initialValues={step1Key > 0 ? input : null}
+              isSubmitting={isComputing}
+              onNext={async (data) => {
+                if (isComputing) return
+                setIsComputing(true)
                 try {
-                  await saveReading(input, aiReport)
-                } catch {
-                  /* 静默失败 */
+                  const { computeAll } = await import('./lib/mingli/computeReport')
+                  const res = computeAll(data)
+                  setInput(data)
+                  setResults(res)
+                  setStep(2)
+                  saveWizardSnapshot(2, data, res)
+                } finally {
+                  setIsComputing(false)
                 }
               }}
             />
-          </>
-        </Suspense>
+          )}
+
+          {step === 2 && input && results && (
+            <Suspense fallback={<StepLoading />}>
+              <>
+                <div className="mx-auto max-w-6xl px-4">
+                  <div className="mt-2 flex items-center justify-start gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setStep1Key((k) => k + 1)
+                        setStep(1)
+                        clearWizardSnapshot()
+                      }}
+                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 hover:border-white/20"
+                    >
+                      返回修改
+                    </button>
+                  </div>
+                </div>
+                <Step3Report
+                  input={input}
+                  results={results}
+                  onAIReportComplete={async (aiReport) => {
+                    try {
+                      await saveReading(input, aiReport)
+                    } catch {
+                      /* 静默失败 */
+                    }
+                  }}
+                />
+              </>
+            </Suspense>
+          )}
+        </>
+      )}
+
+      {/* ── 合盘流程 ── */}
+      {mode === 'heban' && (
+        <>
+          {heBanStep === 1 && (
+            <HeBanInputPage
+              isSubmitting={isHeBanComputing}
+              onNext={async (data) => {
+                if (isHeBanComputing) return
+                setIsHeBanComputing(true)
+                try {
+                  const { computeAll } = await import('./lib/mingli/computeReport')
+                  const resultA = computeAll(data.personA)
+                  const resultB = computeAll(data.personB)
+                  setHeBanInput(data)
+                  setHeBanResults({ resultA, resultB })
+                  setHeBanStep(2)
+                } finally {
+                  setIsHeBanComputing(false)
+                }
+              }}
+            />
+          )}
+
+          {heBanStep === 2 && heBanInput && heBanResults && (
+            <Suspense fallback={<StepLoading />}>
+              <>
+                <div className="mx-auto max-w-6xl px-4">
+                  <div className="mt-2 flex items-center justify-start gap-3">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setHeBanStep(1)
+                        setHeBanResults(null)
+                      }}
+                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 hover:border-white/20"
+                    >
+                      返回修改
+                    </button>
+                  </div>
+                </div>
+                <HeBanReport input={heBanInput} results={heBanResults} />
+              </>
+            </Suspense>
+          )}
+        </>
       )}
     </div>
   )
