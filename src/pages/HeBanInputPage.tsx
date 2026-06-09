@@ -3,6 +3,8 @@ import type { BirthDateInput, Gender, UserInput } from '../lib/types'
 import type { HeBanRelationType, HeBanUserInput } from '../lib/types'
 import Card from '../components/Card'
 import { IconSparkle } from '../components/icons'
+import { getReadings, getReading, type ReadingListItem } from '../lib/history'
+import { supabase } from '../lib/supabase'
 
 // ── 关系类型 ──────────────────────────────────────────────────────
 const RELATION_OPTIONS: { key: HeBanRelationType; label: string; icon: string }[] = [
@@ -202,17 +204,86 @@ function isPersonValid(p: PersonState): boolean {
   return p.name.trim().length >= 2 && p.name.trim().length <= 20 && isValidDate(p.birth)
 }
 
+// ── 历史记录选择弹窗 ──────────────────────────────────────────────
+function HistoryPickerModal({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (item: ReadingListItem) => void
+  onClose: () => void
+}) {
+  const [list, setList] = useState<ReadingListItem[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
+
+  useEffect(() => {
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) {
+        setIsLoggedIn(false)
+        setLoading(false)
+        return
+      }
+      setIsLoggedIn(true)
+      try {
+        const rows = await getReadings()
+        setList(rows)
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : '加载失败')
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
+
+  return (
+    <Modal title="选择历史档案" onClose={onClose}>
+      {isLoggedIn === false ? (
+        <p className="text-center text-sm text-slate-400 py-4">请先登录后才能使用历史档案功能</p>
+      ) : loading ? (
+        <p className="text-center text-sm text-slate-400 py-4">加载中…</p>
+      ) : error ? (
+        <p className="text-center text-sm text-rose-400 py-4">{error}</p>
+      ) : !list || list.length === 0 ? (
+        <p className="text-center text-sm text-slate-400 py-4">暂无历史记录，先去做一次单人测算吧</p>
+      ) : (
+        <ul className="max-h-64 space-y-2 overflow-y-auto">
+          {list.map((row) => (
+            <li key={row.id}>
+              <button
+                type="button"
+                onClick={() => { onSelect(row); onClose() }}
+                className="w-full rounded-xl border border-amber-400/20 bg-white/[0.04] px-4 py-3 text-left transition hover:border-amber-400/40 hover:bg-white/[0.07]"
+              >
+                <div className="font-medium text-amber-100/95 text-sm">{row.name ?? '未命名'}</div>
+                <div className="mt-0.5 text-xs text-slate-400">
+                  出生：{row.birth_date ?? '—'}
+                  <span className="mx-2">·</span>
+                  {row.created_at ? new Date(row.created_at).toLocaleDateString() : '—'}
+                </div>
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Modal>
+  )
+}
+
 // ── 单人信息卡片（字段布局与 Step1Input 完全一致） ─────────────────
 function PersonCard({
   label,
   index,
   value,
   onChange,
+  onSelectFromHistory,
 }: {
   label: string
   index: number
   value: PersonState
   onChange: (patch: Partial<PersonState>) => void
+  onSelectFromHistory?: () => void
 }) {
   const [showTimePicker, setShowTimePicker] = useState(false)
   const [showLocationPicker, setShowLocationPicker] = useState(false)
@@ -237,6 +308,18 @@ function PersonCard({
           </span>
         }
         title={label}
+        headerRight={
+          onSelectFromHistory ? (
+            <button
+              type="button"
+              onClick={onSelectFromHistory}
+              className="flex items-center gap-1 rounded-lg border border-amber-400/30 bg-amber-400/10 px-2.5 py-1 text-[11px] font-medium text-amber-200/80 transition hover:border-amber-400/50 hover:bg-amber-400/15 hover:text-amber-100"
+            >
+              <span>📋</span>
+              <span>从历史选取</span>
+            </button>
+          ) : undefined
+        }
       >
         <div className="grid gap-3">
 
@@ -332,6 +415,26 @@ function PersonCard({
   )
 }
 
+// ── 将历史 UserInput 转换为 PersonState ──────────────────────────
+function userInputToPersonState(input: UserInput): PersonState {
+  return {
+    name: input.name ?? '',
+    birth: {
+      year: input.birth.year,
+      month: input.birth.month,
+      day: input.birth.day,
+      hour: input.birth.hour,
+      minute: input.birth.minute ?? 0,
+    },
+    gender: input.gender ?? '男',
+    calendarType: input.calendarType ?? '公历',
+    country: input.country ?? '中国',
+    province: input.province ?? '',
+    city: input.city ?? '',
+    district: input.district ?? '',
+  }
+}
+
 // ── 主组件 ────────────────────────────────────────────────────────
 export default function HeBanInputPage({
   onNext,
@@ -344,6 +447,8 @@ export default function HeBanInputPage({
   const [personA, setPersonA] = useState<PersonState>(() => defaultPersonState(today, '男'))
   const [personB, setPersonB] = useState<PersonState>(() => defaultPersonState(today, '女'))
   const [relation, setRelation] = useState<HeBanRelationType>('情侣')
+  // 历史选取弹窗：null=关闭；'A'=正在选甲方；'B'=正在选乙方
+  const [historyPickTarget, setHistoryPickTarget] = useState<'A' | 'B' | null>(null)
 
   const patchA = (patch: Partial<PersonState>) => setPersonA((p) => ({ ...p, ...patch }))
   const patchB = (patch: Partial<PersonState>) => setPersonB((p) => ({ ...p, ...patch }))
@@ -353,6 +458,19 @@ export default function HeBanInputPage({
   const handleNext = () => {
     if (!allOk || isSubmitting) return
     void onNext({ personA: personStateToUserInput(personA), personB: personStateToUserInput(personB), relation })
+  }
+
+  // 历史记录选中回调：根据 target 填充对应方
+  const handleHistorySelect = async (item: ReadingListItem) => {
+    try {
+      const detail = await getReading(item.id)
+      if (!detail.input_data) return
+      const state = userInputToPersonState(detail.input_data)
+      if (historyPickTarget === 'A') setPersonA(state)
+      else if (historyPickTarget === 'B') setPersonB(state)
+    } catch {
+      // 静默失败，用户可手动重填
+    }
   }
 
   return (
@@ -369,8 +487,22 @@ export default function HeBanInputPage({
 
       <div className="grid gap-4">
 
+        {/* 历史选取弹窗 */}
+        {historyPickTarget && (
+          <HistoryPickerModal
+            onSelect={(item) => { void handleHistorySelect(item) }}
+            onClose={() => setHistoryPickTarget(null)}
+          />
+        )}
+
         {/* 甲方信息 */}
-        <PersonCard label="甲方信息" index={1} value={personA} onChange={patchA} />
+        <PersonCard
+          label="甲方信息"
+          index={1}
+          value={personA}
+          onChange={patchA}
+          onSelectFromHistory={() => setHistoryPickTarget('A')}
+        />
 
         {/* 关系类型 */}
         <Card icon={<IconSparkle className="h-6 w-6" />} title="两人关系">
@@ -395,7 +527,13 @@ export default function HeBanInputPage({
         </Card>
 
         {/* 乙方信息 */}
-        <PersonCard label="乙方信息" index={2} value={personB} onChange={patchB} />
+        <PersonCard
+          label="乙方信息"
+          index={2}
+          value={personB}
+          onChange={patchB}
+          onSelectFromHistory={() => setHistoryPickTarget('B')}
+        />
 
         {/* 校验提示 */}
         {!allOk && (personA.name.length > 0 || personB.name.length > 0) && (
