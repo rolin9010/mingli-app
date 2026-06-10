@@ -5,7 +5,15 @@ import {
   AiReportMarkdown,
   normalizeAiReportMarkdown,
 } from '../lib/aiReportMarkdown'
-import { getReading, getReadings, isHeBanInputData, type ReadingDetail, type ReadingListItem } from '../lib/history'
+import {
+  deleteReading,
+  getReading,
+  getReadings,
+  isHeBanInputData,
+  updateReadingName,
+  type ReadingDetail,
+  type ReadingListItem,
+} from '../lib/history'
 import { Step2ChartsSection } from './Step2Results'
 import { computeAll } from '../lib/mingli/computeReport'
 import type { HeBanResults, HeBanUserInput, ReportResults, UserInput } from '../lib/types'
@@ -22,6 +30,16 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
   const [detail, setDetail] = useState<ReadingDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
+
+  // 删除相关状态
+  const [deletingId, setDeletingId] = useState<string | null>(null)   // 正在确认删除的 id
+  const [deleteLoading, setDeleteLoading] = useState(false)
+
+  // 修改名称相关状态
+  const [editingName, setEditingName] = useState(false)
+  const [nameInput, setNameInput] = useState('')
+  const [nameLoading, setNameLoading] = useState(false)
+  const [nameError, setNameError] = useState('')
 
   // 单人排盘
   const [computedResults, setComputedResults] = useState<ReportResults | null>(null)
@@ -75,7 +93,10 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
     void (async () => {
       try {
         const row = await getReading(selectedId)
-        if (!cancelled) setDetail(row)
+        if (!cancelled) {
+          setDetail(row)
+          setNameInput(row.name ?? '')
+        }
       } catch (e: unknown) {
         if (!cancelled) setDetailError(e instanceof Error ? e.message : '加载失败')
       } finally {
@@ -95,12 +116,10 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
       setComputedError('')
       return
     }
-
     let cancelled = false
     setComputedLoading(true)
     setComputedError('')
     setComputedResults(null)
-
     void (async () => {
       try {
         const res = computeAll(detail.input_data as UserInput)
@@ -114,10 +133,7 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
         setComputedLoading(false)
       }
     })()
-
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [detail?.input_data, isHeBan])
 
   // 合盘排盘计算
@@ -128,12 +144,10 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
       setHeBanError('')
       return
     }
-
     let cancelled = false
     setHeBanLoading(true)
     setHeBanError('')
     setHeBanResults(null)
-
     void (async () => {
       try {
         const heBanInput = detail.input_data as HeBanUserInput
@@ -149,10 +163,7 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
         setHeBanLoading(false)
       }
     })()
-
-    return () => {
-      cancelled = true
-    }
+    return () => { cancelled = true }
   }, [detail?.input_data, isHeBan])
 
   const displayMd = useMemo(() => {
@@ -160,31 +171,122 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
     return normalizeAiReportMarkdown(raw)
   }, [detail?.ai_report])
 
+  // ── 删除处理 ──
+  const handleDelete = async (id: string) => {
+    setDeleteLoading(true)
+    try {
+      await deleteReading(id)
+      setList((prev) => prev?.filter((r) => r.id !== id) ?? null)
+      setDeletingId(null)
+      // 若正在查看该详情，返回列表
+      if (selectedId === id) {
+        setSelectedId(null)
+        setDetail(null)
+      }
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '删除失败')
+    } finally {
+      setDeleteLoading(false)
+    }
+  }
+
+  // ── 修改名称处理 ──
+  const handleSaveName = async () => {
+    if (!selectedId || !nameInput.trim()) return
+    setNameLoading(true)
+    setNameError('')
+    try {
+      await updateReadingName(selectedId, nameInput.trim())
+      setDetail((prev) => prev ? { ...prev, name: nameInput.trim() } : prev)
+      setList((prev) =>
+        prev?.map((r) => r.id === selectedId ? { ...r, name: nameInput.trim() } : r) ?? null,
+      )
+      setEditingName(false)
+    } catch (e: unknown) {
+      setNameError(e instanceof Error ? e.message : '修改失败')
+    } finally {
+      setNameLoading(false)
+    }
+  }
+
   // ── 详情页 ──
   if (selectedId) {
     return (
-      <div className="mx-auto max-w-6xl px-4 pb-16 pt-8">
-        <button
-          type="button"
-          onClick={() => {
-            setSelectedId(null)
-            setDetail(null)
-            setDetailError('')
-          }}
-          className="mb-6 rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-200 hover:border-white/20"
-        >
-          ← 返回列表
-        </button>
+      <div className="mx-auto max-w-xl px-4 pb-16 pt-8">
+        {/* 顶部操作栏 */}
+        <div className="mb-6 flex items-center justify-between gap-3">
+          <button
+            type="button"
+            onClick={() => {
+              setSelectedId(null)
+              setDetail(null)
+              setDetailError('')
+              setEditingName(false)
+            }}
+            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-slate-200 hover:border-white/20"
+          >
+            ← 返回列表
+          </button>
+          {detail && !detailLoading && (
+            <button
+              type="button"
+              onClick={() => setDeletingId(selectedId)}
+              className="rounded-xl border border-rose-400/30 bg-rose-400/10 px-3 py-2 text-xs font-medium text-rose-300 hover:border-rose-400/50 hover:bg-rose-400/15"
+            >
+              删除记录
+            </button>
+          )}
+        </div>
+
+        {/* 标题 / 名称编辑区 */}
         {detail && !detailLoading ? (
-          <div className="mb-4 text-sm text-slate-400">
-            <span className="text-amber-100/90">{detail.name ?? '—'}</span>
-            <span className="mx-2">·</span>
-            <span>{detail.birth_date ?? '—'}</span>
-            <span className="mx-2">·</span>
-            <span>{detail.created_at ? new Date(detail.created_at).toLocaleString() : '—'}</span>
-            {isHeBan && (
-              <span className="ml-2 rounded-full bg-amber-400/15 px-2 py-0.5 text-xs text-amber-300">合盘</span>
+          <div className="mb-5 rounded-2xl border border-amber-400/20 bg-white/[0.03] px-4 py-4">
+            {editingName ? (
+              <div className="flex items-center gap-2">
+                <input
+                  value={nameInput}
+                  onChange={(e) => setNameInput(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === 'Enter') void handleSaveName() }}
+                  autoFocus
+                  className="flex-1 rounded-xl border border-amber-400/40 bg-white/5 px-3 py-1.5 text-sm text-amber-100 outline-none focus:border-amber-400/70"
+                />
+                <button
+                  type="button"
+                  onClick={() => void handleSaveName()}
+                  disabled={nameLoading}
+                  className="rounded-xl border border-amber-400/50 bg-amber-400/15 px-3 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-400/25 disabled:opacity-50"
+                >
+                  {nameLoading ? '保存…' : '保存'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setEditingName(false); setNameInput(detail.name ?? ''); setNameError('') }}
+                  className="rounded-xl border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200"
+                >
+                  取消
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2">
+                <span className="text-base font-semibold text-amber-100/95">{detail.name ?? '—'}</span>
+                {isHeBan && (
+                  <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-xs text-amber-300">合盘</span>
+                )}
+                <button
+                  type="button"
+                  onClick={() => { setEditingName(true); setNameInput(detail.name ?? '') }}
+                  className="ml-1 rounded-lg border border-white/10 px-2 py-0.5 text-[11px] text-slate-400 hover:border-white/20 hover:text-slate-200"
+                >
+                  ✎ 修改名称
+                </button>
+              </div>
             )}
+            {nameError && <p className="mt-1 text-xs text-rose-400">{nameError}</p>}
+            <div className="mt-1.5 flex flex-wrap gap-x-3 text-xs text-slate-400">
+              <span>{detail.birth_date ?? '—'}</span>
+              <span>·</span>
+              <span>{detail.created_at ? new Date(detail.created_at).toLocaleString() : '—'}</span>
+            </div>
           </div>
         ) : null}
 
@@ -237,25 +339,49 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
         ) : detailError ? (
           <p className="text-sm text-rose-400">{detailError}</p>
         ) : detail ? (
-          <div className="mx-auto mt-6 w-full max-w-3xl">
+          <div className="mt-6 w-full">
             <div
               className="prose prose-invert prose-sm ai-report-prose max-w-none leading-relaxed rounded-2xl border border-amber-900/35 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.06)] sm:p-7"
-              style={{
-                fontFamily: AI_READING_SERIF,
-                ...READING_PANEL_SURFACE_STYLE,
-              }}
+              style={{ fontFamily: AI_READING_SERIF, ...READING_PANEL_SURFACE_STYLE }}
             >
               <AiReportMarkdown markdown={displayMd || detail.ai_report || ''} />
             </div>
           </div>
         ) : null}
+
+        {/* 删除确认弹窗 */}
+        {deletingId && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6">
+            <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+              <p className="mb-2 text-base font-semibold text-slate-100">确认删除？</p>
+              <p className="mb-6 text-sm text-slate-400">删除后无法恢复，AI 解读内容也将一并删除。</p>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setDeletingId(null)}
+                  className="flex-1 rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm text-slate-200 hover:border-white/20"
+                >
+                  取消
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleDelete(deletingId)}
+                  disabled={deleteLoading}
+                  className="flex-1 rounded-xl border border-rose-400/40 bg-rose-400/15 py-2.5 text-sm font-medium text-rose-200 hover:bg-rose-400/25 disabled:opacity-50"
+                >
+                  {deleteLoading ? '删除中…' : '确认删除'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     )
   }
 
   // ── 列表页 ──
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-16 pt-8">
+    <div className="mx-auto max-w-xl px-4 pb-16 pt-8">
       <button
         type="button"
         onClick={onBack}
@@ -276,11 +402,12 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
           {list.map((row) => {
             const isHeBanItem = row.name?.includes('合盘')
             return (
-              <li key={row.id}>
+              <li key={row.id} className="flex items-stretch gap-2">
+                {/* 主按钮 — 点击进入详情 */}
                 <button
                   type="button"
                   onClick={() => setSelectedId(row.id)}
-                  className="w-full rounded-xl border border-amber-400/20 bg-white/[0.04] px-4 py-3 text-left transition-colors hover:border-amber-400/40 hover:bg-white/[0.06]"
+                  className="flex-1 rounded-xl border border-amber-400/20 bg-white/[0.04] px-4 py-3 text-left transition-colors hover:border-amber-400/40 hover:bg-white/[0.06]"
                 >
                   <div className="flex items-center gap-2">
                     <span className="font-medium text-amber-100/95">{row.name ?? '未命名'}</span>
@@ -290,13 +417,50 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
                   </div>
                   <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-slate-400">
                     <span>{isHeBanItem ? '排盘' : '出生'}：{row.birth_date ?? '—'}</span>
-                    <span>时间：{row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</span>
+                    <span>· {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</span>
                   </div>
+                </button>
+
+                {/* 删除按钮 */}
+                <button
+                  type="button"
+                  onClick={() => setDeletingId(row.id)}
+                  title="删除"
+                  className="shrink-0 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-rose-400/70 transition hover:border-rose-400/30 hover:bg-rose-400/10 hover:text-rose-300"
+                >
+                  ✕
                 </button>
               </li>
             )
           })}
         </ul>
+      )}
+
+      {/* 删除确认弹窗 */}
+      {deletingId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-6">
+          <div className="w-full max-w-sm rounded-2xl border border-white/10 bg-slate-900 p-6 shadow-2xl">
+            <p className="mb-2 text-base font-semibold text-slate-100">确认删除？</p>
+            <p className="mb-6 text-sm text-slate-400">删除后无法恢复，AI 解读内容也将一并删除。</p>
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={() => setDeletingId(null)}
+                className="flex-1 rounded-xl border border-white/10 bg-white/5 py-2.5 text-sm text-slate-200 hover:border-white/20"
+              >
+                取消
+              </button>
+              <button
+                type="button"
+                onClick={() => void handleDelete(deletingId)}
+                disabled={deleteLoading}
+                className="flex-1 rounded-xl border border-rose-400/40 bg-rose-400/15 py-2.5 text-sm font-medium text-rose-200 hover:bg-rose-400/25 disabled:opacity-50"
+              >
+                {deleteLoading ? '删除中…' : '确认删除'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   )

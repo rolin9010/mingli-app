@@ -94,3 +94,15 @@ export async function getReading(id: string): Promise<ReadingDetail> {
   if (error) throw error
   return data as ReadingDetail
 }
+
+/** 删除一条历史记录 */
+export async function deleteReading(id: string): Promise<void> {
+  const { error } = await supabase.from('readings').delete().eq('id', id)
+  if (error) throw error
+}
+
+/** 修改历史记录的备注名称 */
+export async function updateReadingName(id: string, name: string): Promise<void> {
+  const { error } = await supabase.from('readings').update({ name }).eq('id', id)
+  if (error) throw error
+}
