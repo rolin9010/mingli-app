@@ -443,38 +443,43 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
                   type="button"
                   onClick={() => setSelectedId(row.id)}
                   className="flex-1 rounded-xl border border-amber-400/20 bg-white/[0.04] px-4 py-3 text-left transition-colors hover:border-amber-400/40 hover:bg-white/[0.06]"
-                >
-                  {/* 姓名行 */}
-                  <div className="mb-2 flex items-center gap-2">
-                    <span className="font-medium text-amber-100/95">{row.name ?? '未命名'}</span>
-                    {isHeBanItem && (
-                      <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-xs text-amber-300">合盘</span>
-                    )}
-                  </div>
-                  {/* 信息行：左侧出生日期 / 右侧四柱八字 */}
-                  <div className="flex items-start justify-between gap-3">
-                    {/* 左：出生年月日时 */}
-                    <div className="text-xs text-slate-400 leading-relaxed">
-                      <div>{isHeBanItem ? '甲方' : ''}{birthLabel}</div>
-                      <div className="mt-0.5 text-slate-500">
-                        {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}
-                      </div>
-                    </div>
-                    {/* 右：四柱八字 */}
-                    {pillars ? (
-                      <div className="shrink-0 text-right">
-                        <div className="flex gap-1 justify-end">
-                          {(['年', '月', '日', '时'] as const).map((label, i) => (
-                            <div key={label} className="flex flex-col items-center">
-                              <span className="text-[10px] text-slate-500">{label}</span>
-                              <span className="text-xs font-medium text-amber-200/90 tracking-wider">{pillars[i]}</span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                  </div>
-                </button>
+                  >
+                   {/* 整体：左侧信息 + 右侧四柱，顶对齐 */}
+                   <div className="flex items-start justify-between gap-3">
+                     {/* 左：姓名 + 出生日期 */}
+                     <div>
+                       <div className="mb-1.5 flex items-center gap-2">
+                         <span className="font-medium text-amber-100/95">{row.name ?? '未命名'}</span>
+                         {isHeBanItem && (
+                           <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-xs text-amber-300">合盘</span>
+                         )}
+                       </div>
+                       <div className="text-xs text-slate-400 leading-relaxed">
+                         <div>{isHeBanItem ? '甲方 ' : ''}{birthLabel}</div>
+                         <div className="mt-0.5 text-slate-500">
+                           {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}
+                         </div>
+                       </div>
+                     </div>
+                     {/* 右：四柱八字，每柱柱名→天干→地支竖排 */}
+                     {pillars ? (
+                       <div className="shrink-0 flex gap-2">
+                         {(['年', '月', '日', '时'] as const).map((label, i) => {
+                           const gz = pillars[i] ?? ''
+                           const stem = gz[0] ?? ''   // 天干
+                           const branch = gz[1] ?? '' // 地支
+                           return (
+                             <div key={label} className="flex flex-col items-center gap-0.5">
+                               <span className="text-[10px] text-slate-500 leading-none">{label}</span>
+                               <span className="text-xs font-medium text-amber-200/90 leading-tight">{stem}</span>
+                               <span className="text-xs font-medium text-amber-200/70 leading-tight">{branch}</span>
+                             </div>
+                           )
+                         })}
+                       </div>
+                     ) : null}
+                   </div>
+                  </button>
 
                 {/* 删除按钮 */}
                 <button
