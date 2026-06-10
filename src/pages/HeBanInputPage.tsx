@@ -3,7 +3,7 @@ import type { BirthDateInput, Gender, UserInput } from '../lib/types'
 import type { HeBanRelationType, HeBanUserInput } from '../lib/types'
 import Card from '../components/Card'
 import { IconSparkle } from '../components/icons'
-import { getReadings, getReading, type ReadingListItem } from '../lib/history'
+import { getReadings, getReading, isHeBanInputData, type ReadingListItem } from '../lib/history'
 import { supabase } from '../lib/supabase'
 
 // ── 关系类型 ──────────────────────────────────────────────────────
@@ -464,7 +464,7 @@ export default function HeBanInputPage({
   const handleHistorySelect = async (item: ReadingListItem) => {
     try {
       const detail = await getReading(item.id)
-      if (!detail.input_data) return
+      if (!detail.input_data || isHeBanInputData(detail.input_data)) return
       const state = userInputToPersonState(detail.input_data)
       if (historyPickTarget === 'A') setPersonA(state)
       else if (historyPickTarget === 'B') setPersonB(state)
