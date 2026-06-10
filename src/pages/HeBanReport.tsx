@@ -263,7 +263,7 @@ export default function HeBanReport({
   const relationLabel = input.relation
 
   return (
-    <div className="mx-auto max-w-3xl px-4 pb-12 pt-8">
+    <div className="mx-auto max-w-xl px-4 pb-12 pt-8">
       <div className="space-y-5">
 
         {/* ── 上半部分：双方测算结果（Tab 切换） ── */}

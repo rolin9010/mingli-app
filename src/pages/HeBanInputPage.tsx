@@ -474,7 +474,7 @@ export default function HeBanInputPage({
   }
 
   return (
-    <div className="mx-auto max-w-lg px-4 pb-12 pt-8">
+    <div className="mx-auto max-w-xl px-4 pb-12 pt-8">
       {/* 标题区 — 与单人测算宽度和风格完全一致 */}
       <div className="mb-6 rounded-2xl border border-amber-400/20 bg-white/[0.03] px-4 py-5 sm:px-6">
         <p className="text-center font-serif text-2xl font-semibold tracking-wide text-amber-200/95 sm:text-3xl">

@@ -110,7 +110,7 @@ function WizardApp({ user }: { user: User | null }) {
 
       {/* ── 模式切换 Tab（仅在首页/输入页显示） ── */}
       {((mode === 'single' && step === 1) || (mode === 'heban' && heBanStep === 1)) && (
-        <div className="mx-auto max-w-lg px-4 pt-5">
+        <div className="mx-auto max-w-xl px-4 pt-5">
           <div className="flex gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-1.5">
             <button
               type="button"
@@ -226,7 +226,7 @@ function WizardApp({ user }: { user: User | null }) {
           {heBanStep === 2 && heBanInput && heBanResults && (
             <Suspense fallback={<StepLoading />}>
               <>
-                <div className="mx-auto max-w-3xl px-4">
+                <div className="mx-auto max-w-xl px-4">
                   <div className="mt-2 flex items-center justify-start gap-3">
                     <button
                       type="button"
