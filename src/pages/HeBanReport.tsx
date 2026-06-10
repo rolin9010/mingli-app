@@ -212,6 +212,10 @@ export default function HeBanReport({
   const [activeTab, setActiveTab] = useState<HeBanTabKey>('greeting')
   // 上半部分：切换双方测算的 Tab
   const [activePersonTab, setActivePersonTab] = useState<'A' | 'B'>('A')
+  // 保存状态
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(
+    getCachedAiReport(fingerprint) ? 'saved' : 'idle',
+  )
 
   useEffect(() => {
     const id = 'mingli-font-noto-serif-sc'
@@ -241,7 +245,13 @@ export default function HeBanReport({
       setAiPhase('done')
       setActiveTab('greeting')
       setCachedAiReport(fingerprint, text)
-      await onAIReportComplete?.(text)
+      setSaveStatus('saving')
+      try {
+        await onAIReportComplete?.(text)
+        setSaveStatus('saved')
+      } catch {
+        setSaveStatus('error')
+      }
     } catch (e: unknown) {
       setAiError(e instanceof Error ? e.message : '解读失败，请重试')
       setAiPhase('error')
@@ -287,17 +297,6 @@ export default function HeBanReport({
           ) : (
             <Step2ChartsSection input={input.personB} results={results.resultB} />
           )}
-        </div>
-
-        {/* ── 下半部分：合盘分析 ── */}
-        <div className="mx-auto w-full max-w-3xl">
-          {/* 五行对比 */}
-          <WuxingCompare
-            elementsA={results.resultA.bazi.elements}
-            elementsB={results.resultB.bazi.elements}
-            nameA={nameA}
-            nameB={nameB}
-          />
         </div>
 
         {/* AI 合盘解读 */}
@@ -379,6 +378,17 @@ export default function HeBanReport({
                     className="rounded-2xl border border-amber-900/35 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.06)] sm:p-6"
                     style={READING_PANEL_SURFACE_STYLE}
                   >
+                    {/* 五行能量对比：只在「能量契合」Tab 顶部展示 */}
+                    {activeTab === 'topic1' && (
+                      <div className="mb-5">
+                        <WuxingCompare
+                          elementsA={results.resultA.bazi.elements}
+                          elementsB={results.resultB.bazi.elements}
+                          nameA={nameA}
+                          nameB={nameB}
+                        />
+                      </div>
+                    )}
                     <TabContent markdown={topics[activeTab]} />
                   </div>
 
@@ -416,7 +426,21 @@ export default function HeBanReport({
                 </div>
               ) : null}
 
-              <p className="mt-6 border-t border-white/10 pt-4 text-xs leading-6 text-slate-100/70">
+              {/* 保存记录按钮 */}
+              {aiPhase === 'done' && (
+                <div className="flex items-center justify-end gap-2 border-t border-white/10 pt-4 mt-6">
+                  {saveStatus === 'saved' ? (
+                    <span className="flex items-center gap-1.5 text-xs text-emerald-400">
+                      <span>✓</span> 已保存至历史记录
+                    </span>
+                  ) : saveStatus === 'saving' ? (
+                    <span className="text-xs text-slate-400">保存中…</span>
+                  ) : saveStatus === 'error' ? (
+                    <span className="text-xs text-rose-400">保存失败，请重试</span>
+                  ) : null}
+                </div>
+              )}
+              <p className="mt-4 text-xs leading-6 text-slate-100/70">
                 本报告仅用于娱乐与自我探索。请理性对待测算结果，把行动落实到现实生活中。
               </p>
             </div>
