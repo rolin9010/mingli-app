@@ -60,7 +60,7 @@ export async function saveHeBanReading(input: HeBanUserInput, aiReport: string) 
       user_id: user.id,
       input_data: input as unknown as Record<string, unknown>,
       ai_report: aiReport,
-      name: `${input.personA.name} × ${input.personB.name} 合盘`,
+      name: `${input.personA.name} × ${input.personB.name}`,
       birth_date: `${input.personA.birth.year}-${String(input.personA.birth.month).padStart(2, '0')}-${String(input.personA.birth.day).padStart(2, '0')}`,
     })
     .select()

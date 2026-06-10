@@ -345,7 +345,7 @@ function UserBar({
               onClick={onHistory}
               className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-2.5 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-400/20"
             >
-              历史记录
+              档案
             </button>
           ) : (
             <button
@@ -380,9 +380,9 @@ function UserBar({
               type="button"
               onClick={onHistory}
               className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-slate-400 hover:border-white/20 hover:text-slate-200"
-              title="登录后可同步历史"
+              title="登录后可同步档案"
             >
-              历史记录
+              档案
             </button>
           ) : null}
         </>

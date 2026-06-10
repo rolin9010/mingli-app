@@ -413,6 +413,12 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
   }
 
   // ── 列表页 ──
+  // 仅保留个人档案（过滤合盘）
+  const personalList = useMemo(
+    () => (list ?? []).filter((row) => !isHeBanInputData(row.input_data ?? null)),
+    [list],
+  )
+
   return (
     <div className="mx-auto max-w-xl px-4 pb-16 pt-8">
       <button
@@ -422,20 +428,22 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
       >
         ← 返回
       </button>
-      <h2 className="mb-6 text-lg font-semibold tracking-wide text-amber-100">历史记录</h2>
+      <h2 className="mb-6 text-lg font-semibold tracking-wide text-amber-100">历史档案</h2>
 
       {loading ? (
         <p className="text-sm text-slate-400">加载中…</p>
       ) : listError ? (
         <p className="text-sm text-rose-400">{listError}</p>
-      ) : !list || list.length === 0 ? (
-        <p className="text-sm text-slate-400">暂无历史记录，去测算一次吧</p>
+      ) : personalList.length === 0 ? (
+        <p className="text-sm text-slate-400">暂无个人档案，去测算一次吧</p>
       ) : (
         <ul className="space-y-3">
-          {list.map((row) => {
-            const isHeBanItem = isHeBanInputData(row.input_data ?? null)
+          {personalList.map((row) => {
             const pillars = getPillarsFromInput(row)
             const birthLabel = getBirthLabel(row)
+            const updatedAt = row.created_at
+              ? new Date(row.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
+              : '—'
             return (
               <li key={row.id} className="flex items-stretch gap-2">
                 {/* 主按钮 — 点击进入详情 */}
@@ -443,43 +451,34 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
                   type="button"
                   onClick={() => setSelectedId(row.id)}
                   className="flex-1 rounded-xl border border-amber-400/20 bg-white/[0.04] px-4 py-3 text-left transition-colors hover:border-amber-400/40 hover:bg-white/[0.06]"
-                  >
-                   {/* 整体：左侧信息 + 右侧四柱，顶对齐 */}
-                   <div className="flex items-start justify-between gap-3">
-                     {/* 左：姓名 + 出生日期 */}
-                     <div>
-                       <div className="mb-1.5 flex items-center gap-2">
-                         <span className="font-medium text-amber-100/95">{row.name ?? '未命名'}</span>
-                         {isHeBanItem && (
-                           <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-xs text-amber-300">合盘</span>
-                         )}
-                       </div>
-                       <div className="text-xs text-slate-400 leading-relaxed">
-                         <div>{isHeBanItem ? '甲方 ' : ''}{birthLabel}</div>
-                         <div className="mt-0.5 text-slate-500">
-                           {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}
-                         </div>
-                       </div>
-                     </div>
-                     {/* 右：四柱八字，每柱柱名→天干→地支竖排 */}
-                     {pillars ? (
-                       <div className="shrink-0 flex gap-2">
-                         {(['年', '月', '日', '时'] as const).map((label, i) => {
-                           const gz = pillars[i] ?? ''
-                           const stem = gz[0] ?? ''   // 天干
-                           const branch = gz[1] ?? '' // 地支
-                           return (
-                             <div key={label} className="flex flex-col items-center gap-0.5">
-                               <span className="text-[10px] text-slate-500 leading-none">{label}</span>
-                               <span className="text-xs font-medium text-amber-200/90 leading-tight">{stem}</span>
-                               <span className="text-xs font-medium text-amber-200/70 leading-tight">{branch}</span>
-                             </div>
-                           )
-                         })}
-                       </div>
-                     ) : null}
-                   </div>
-                  </button>
+                >
+                  {/* 第一行：姓名（左）+ 更新时间（右） */}
+                  <div className="mb-1.5 flex items-center justify-between gap-2">
+                    <span className="font-medium text-amber-100/95 leading-snug">{row.name ?? '未命名'}</span>
+                    <span className="shrink-0 text-[11px] text-slate-500">{updatedAt}</span>
+                  </div>
+                  {/* 第二行：出生日期（左）+ 四柱（右） */}
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="text-xs text-slate-400 leading-relaxed">{birthLabel}</span>
+                    {/* 右：四柱八字，每柱柱名→天干→地支竖排 */}
+                    {pillars ? (
+                      <div className="shrink-0 flex gap-2">
+                        {(['年', '月', '日', '时'] as const).map((label, i) => {
+                          const gz = pillars[i] ?? ''
+                          const stem = gz[0] ?? ''
+                          const branch = gz[1] ?? ''
+                          return (
+                            <div key={label} className="flex flex-col items-center gap-0.5">
+                              <span className="text-[10px] text-slate-500 leading-none">{label}</span>
+                              <span className="text-xs font-medium text-amber-200/90 leading-tight">{stem}</span>
+                              <span className="text-xs font-medium text-amber-200/70 leading-tight">{branch}</span>
+                            </div>
+                          )
+                        })}
+                      </div>
+                    ) : null}
+                  </div>
+                </button>
 
                 {/* 删除按钮 */}
                 <button
