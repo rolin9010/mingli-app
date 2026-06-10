@@ -1,5 +1,5 @@
 import { supabase } from './supabase'
-import type { UserInput } from './types'
+import type { UserInput, HeBanUserInput } from './types'
 
 export type ReadingListItem = {
   id: string
@@ -13,12 +13,17 @@ export type ReadingDetail = {
   user_id: string
   name: string | null
   birth_date: string | null
-  input_data: UserInput | null
+  input_data: UserInput | HeBanUserInput | null
   ai_report: string | null
   created_at: string
 }
 
-/** 保存一次排盘记录 */
+/** 判断 input_data 是否为合盘记录 */
+export function isHeBanInputData(data: UserInput | HeBanUserInput | null): data is HeBanUserInput {
+  return data !== null && 'personA' in data && 'personB' in data && 'relation' in data
+}
+
+/** 保存一次单人排盘记录 */
 export async function saveReading(input: UserInput, aiReport: string) {
   const {
     data: { user },
@@ -33,6 +38,29 @@ export async function saveReading(input: UserInput, aiReport: string) {
       ai_report: aiReport,
       name: input.name || '未命名',
       birth_date: `${input.birth.year}-${String(input.birth.month).padStart(2, '0')}-${String(input.birth.day).padStart(2, '0')}`,
+    })
+    .select()
+    .single()
+
+  if (error) throw error
+  return data
+}
+
+/** 保存一次合盘记录 */
+export async function saveHeBanReading(input: HeBanUserInput, aiReport: string) {
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data, error } = await supabase
+    .from('readings')
+    .insert({
+      user_id: user.id,
+      input_data: input as unknown as Record<string, unknown>,
+      ai_report: aiReport,
+      name: `${input.personA.name} × ${input.personB.name} 合盘`,
+      birth_date: `${input.personA.birth.year}-${String(input.personA.birth.month).padStart(2, '0')}-${String(input.personA.birth.day).padStart(2, '0')}`,
     })
     .select()
     .single()

@@ -195,9 +195,11 @@ function TabContent({ markdown }: { markdown: string }) {
 export default function HeBanReport({
   input,
   results,
+  onAIReportComplete,
 }: {
   input: HeBanUserInput
   results: HeBanResults
+  onAIReportComplete?: (aiReport: string) => void | Promise<void>
 }) {
   const fingerprint = useMemo(() => computeHeBanFingerprint(input), [input])
 
@@ -239,6 +241,7 @@ export default function HeBanReport({
       setAiPhase('done')
       setActiveTab('greeting')
       setCachedAiReport(fingerprint, text)
+      await onAIReportComplete?.(text)
     } catch (e: unknown) {
       setAiError(e instanceof Error ? e.message : '解读失败，请重试')
       setAiPhase('error')
@@ -379,16 +382,37 @@ export default function HeBanReport({
                     <TabContent markdown={topics[activeTab]} />
                   </div>
 
-                  {/* 底部操作 */}
-                  <div className="mt-4 flex flex-wrap gap-3">
-                    <button
-                      type="button"
-                      onClick={() => void startAiReading({ force: true })}
-                      className="rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-2 text-xs font-medium text-amber-100 hover:bg-amber-400/20"
-                    >
-                      重新生成
-                    </button>
-                  </div>
+                  {/* 底部翻页导航 */}
+                  {(() => {
+                    const currentIndex = HEBAN_TABS.findIndex((t) => t.key === activeTab)
+                    const prevTab = HEBAN_TABS[currentIndex - 1]
+                    const nextTab = HEBAN_TABS[currentIndex + 1]
+                    if (!prevTab && !nextTab) return null
+                    return (
+                      <div className="mt-4 flex items-center justify-between gap-3">
+                        {prevTab ? (
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab(prevTab.key)}
+                            className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-300 hover:border-white/25 hover:text-slate-100"
+                          >
+                            <span>←</span>
+                            <span className="text-xs opacity-70">{prevTab.icon} {prevTab.label}</span>
+                          </button>
+                        ) : <span />}
+                        {nextTab ? (
+                          <button
+                            type="button"
+                            onClick={() => setActiveTab(nextTab.key)}
+                            className="flex items-center gap-1.5 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-400/20"
+                          >
+                            <span className="text-xs opacity-70">{nextTab.icon} {nextTab.label}</span>
+                            <span>→</span>
+                          </button>
+                        ) : <span />}
+                      </div>
+                    )
+                  })()}
                 </div>
               ) : null}
 

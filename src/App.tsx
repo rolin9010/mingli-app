@@ -2,7 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { signOut } from './lib/auth'
-import { saveReading } from './lib/history'
+import { saveReading, saveHeBanReading } from './lib/history'
 import { supabase } from './lib/supabase'
 import { clearWizardSnapshot, loadWizardSnapshot, saveWizardSnapshot } from './lib/wizardSession'
 import Step1Input from './pages/Step1Input'
@@ -240,7 +240,17 @@ function WizardApp({ user }: { user: User | null }) {
                     </button>
                   </div>
                 </div>
-                <HeBanReport input={heBanInput} results={heBanResults} />
+                <HeBanReport
+                    input={heBanInput}
+                    results={heBanResults}
+                    onAIReportComplete={async (aiReport) => {
+                      try {
+                        await saveHeBanReading(heBanInput, aiReport)
+                      } catch {
+                        /* 静默失败 */
+                      }
+                    }}
+                  />
               </>
             </Suspense>
           )}
