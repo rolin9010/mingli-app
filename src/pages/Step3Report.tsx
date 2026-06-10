@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import {
   AI_READING_SERIF,
@@ -174,6 +174,14 @@ export default function Step3Report({
   const [aiError, setAiError] = useState('')
   const [aiLoadGen, setAiLoadGen] = useState(0)
   const [activeTab, setActiveTab] = useState<TabKey>('greeting')
+  const tabTopRef = useRef<HTMLDivElement>(null)
+
+  const switchTab = (key: TabKey) => {
+    setActiveTab(key)
+    setTimeout(() => {
+      tabTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    }, 0)
+  }
 
   /** 换人/重新排盘后指纹变化 */
   useEffect(() => {
@@ -188,6 +196,7 @@ export default function Step3Report({
       setAiError('')
     }
     setActiveTab('greeting')
+    tabTopRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' })
   }, [reportFingerprint])
 
   useEffect(() => {
@@ -231,11 +240,14 @@ export default function Step3Report({
     setAiContent('')
     try {
       const prompt = buildReadingPrompt(input, results)
-      const text = await fetchAIReading(prompt)
-      setAiContent(text)
-      setAiPhase('done')
-      setActiveTab('greeting')
-      setCachedAiReport(reportFingerprint, text)
+const text = await fetchAIReading(prompt)
+                setAiContent(text)
+                setAiPhase('done')
+                setActiveTab('greeting')
+                setTimeout(() => {
+                  tabTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }, 50)
+                setCachedAiReport(reportFingerprint, text)
       try {
         await onAIReportComplete?.(text)
       } catch { /* 静默失败 */ }
@@ -313,7 +325,7 @@ export default function Step3Report({
 
               {/* done: Tab 切换展示 */}
               {aiPhase === 'done' && topics ? (
-                <div>
+                <div ref={tabTopRef}>
                   {/* Tab 栏 */}
                   <div className="mb-1 flex overflow-x-auto [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
                     <div className="flex min-w-max gap-1.5 pb-2">
@@ -323,7 +335,7 @@ export default function Step3Report({
                           <button
                             key={tab.key}
                             type="button"
-                            onClick={() => setActiveTab(tab.key)}
+                            onClick={() => switchTab(tab.key)}
                             className={[
                               'flex shrink-0 items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-medium transition-all',
                               isActive
@@ -358,7 +370,7 @@ export default function Step3Report({
                         {prevTab ? (
                           <button
                             type="button"
-                            onClick={() => setActiveTab(prevTab.key)}
+                            onClick={() => switchTab(prevTab.key)}
                             className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-300 hover:border-white/25 hover:text-slate-100"
                           >
                             <span>←</span>
@@ -368,7 +380,7 @@ export default function Step3Report({
                         {nextTab ? (
                           <button
                             type="button"
-                            onClick={() => setActiveTab(nextTab.key)}
+                            onClick={() => switchTab(nextTab.key)}
                             className="flex items-center gap-1.5 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-400/20"
                           >
                             <span className="text-xs opacity-70">{nextTab.icon} {nextTab.label}</span>
