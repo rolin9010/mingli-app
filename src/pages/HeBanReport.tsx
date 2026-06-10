@@ -263,11 +263,11 @@ export default function HeBanReport({
   const relationLabel = input.relation
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-12 pt-8">
+    <div className="mx-auto max-w-3xl px-4 pb-12 pt-8">
       <div className="space-y-5">
 
         {/* ── 上半部分：双方测算结果（Tab 切换） ── */}
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="w-full">
           {/* Tab 切换栏 */}
           <div className="mb-4 flex gap-2">
             {[
@@ -300,7 +300,7 @@ export default function HeBanReport({
         </div>
 
         {/* AI 合盘解读 */}
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="w-full">
           <div className="rounded-3xl border border-amber-400/25 bg-amber-400/[0.06] p-6">
             <div className="space-y-5">
               {/* 封面 */}

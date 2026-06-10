@@ -226,7 +226,7 @@ function WizardApp({ user }: { user: User | null }) {
           {heBanStep === 2 && heBanInput && heBanResults && (
             <Suspense fallback={<StepLoading />}>
               <>
-                <div className="mx-auto max-w-6xl px-4">
+                <div className="mx-auto max-w-3xl px-4">
                   <div className="mt-2 flex items-center justify-start gap-3">
                     <button
                       type="button"
