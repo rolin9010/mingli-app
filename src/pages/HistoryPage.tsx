@@ -16,7 +16,40 @@ import {
 } from '../lib/history'
 import { Step2ChartsSection } from './Step2Results'
 import { computeAll } from '../lib/mingli/computeReport'
+import { calcBazi } from '../lib/mingli/bazi'
 import type { HeBanResults, HeBanUserInput, ReportResults, UserInput } from '../lib/types'
+
+/** 根据 input_data 计算四柱，返回「年干支 月干支 日干支 时干支」数组 */
+function getPillarsFromInput(row: ReadingListItem): string[] | null {
+  const data = row.input_data
+  if (!data) return null
+  try {
+    if (isHeBanInputData(data)) {
+      // 合盘：显示甲方四柱
+      const p = calcBazi(data.personA.birth, data.personA.calendarType ?? '公历')
+      return [p.pillars.year, p.pillars.month, p.pillars.day, p.pillars.hour]
+    } else {
+      const p = calcBazi((data as UserInput).birth, (data as UserInput).calendarType ?? '公历')
+      return [p.pillars.year, p.pillars.month, p.pillars.day, p.pillars.hour]
+    }
+  } catch {
+    return null
+  }
+}
+
+/** 从 input_data 里提取用于展示的出生日期字符串（阳历/阴历均兼容） */
+function getBirthLabel(row: ReadingListItem): string {
+  const data = row.input_data
+  if (!data) return row.birth_date ?? '—'
+  try {
+    const input = isHeBanInputData(data) ? data.personA : (data as UserInput)
+    const { year, month, day, hour, minute = 0 } = input.birth
+    const calType = input.calendarType === '农历' ? '农' : '阳'
+    return `${calType}历 ${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')} ${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}`
+  } catch {
+    return row.birth_date ?? '—'
+  }
+}
 
 export interface HistoryPageProps {
   onBack: () => void
@@ -400,7 +433,9 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
       ) : (
         <ul className="space-y-3">
           {list.map((row) => {
-            const isHeBanItem = row.name?.includes('合盘')
+            const isHeBanItem = isHeBanInputData(row.input_data ?? null)
+            const pillars = getPillarsFromInput(row)
+            const birthLabel = getBirthLabel(row)
             return (
               <li key={row.id} className="flex items-stretch gap-2">
                 {/* 主按钮 — 点击进入详情 */}
@@ -409,15 +444,35 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
                   onClick={() => setSelectedId(row.id)}
                   className="flex-1 rounded-xl border border-amber-400/20 bg-white/[0.04] px-4 py-3 text-left transition-colors hover:border-amber-400/40 hover:bg-white/[0.06]"
                 >
-                  <div className="flex items-center gap-2">
+                  {/* 姓名行 */}
+                  <div className="mb-2 flex items-center gap-2">
                     <span className="font-medium text-amber-100/95">{row.name ?? '未命名'}</span>
                     {isHeBanItem && (
                       <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-xs text-amber-300">合盘</span>
                     )}
                   </div>
-                  <div className="mt-1 flex flex-wrap gap-x-3 text-xs text-slate-400">
-                    <span>{isHeBanItem ? '排盘' : '出生'}：{row.birth_date ?? '—'}</span>
-                    <span>· {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}</span>
+                  {/* 信息行：左侧出生日期 / 右侧四柱八字 */}
+                  <div className="flex items-start justify-between gap-3">
+                    {/* 左：出生年月日时 */}
+                    <div className="text-xs text-slate-400 leading-relaxed">
+                      <div>{isHeBanItem ? '甲方' : ''}{birthLabel}</div>
+                      <div className="mt-0.5 text-slate-500">
+                        {row.created_at ? new Date(row.created_at).toLocaleString() : '—'}
+                      </div>
+                    </div>
+                    {/* 右：四柱八字 */}
+                    {pillars ? (
+                      <div className="shrink-0 text-right">
+                        <div className="flex gap-1 justify-end">
+                          {(['年', '月', '日', '时'] as const).map((label, i) => (
+                            <div key={label} className="flex flex-col items-center">
+                              <span className="text-[10px] text-slate-500">{label}</span>
+                              <span className="text-xs font-medium text-amber-200/90 tracking-wider">{pillars[i]}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
                   </div>
                 </button>
 
