@@ -196,10 +196,12 @@ export default function HeBanReport({
   input,
   results,
   onAIReportComplete,
+  onReset,
 }: {
   input: HeBanUserInput
   results: HeBanResults
   onAIReportComplete?: (aiReport: string) => void | Promise<void>
+  onReset?: () => void
 }) {
   const fingerprint = useMemo(() => computeHeBanFingerprint(input), [input])
 
@@ -440,9 +442,20 @@ export default function HeBanReport({
                   ) : null}
                 </div>
               )}
-              <p className="mt-4 text-xs leading-6 text-slate-100/70">
-                本报告仅用于娱乐与自我探索。请理性对待测算结果，把行动落实到现实生活中。
-              </p>
+              <div className="mt-4 border-t border-white/10 pt-4 flex items-center justify-between gap-4">
+                <p className="text-xs leading-6 text-slate-100/70">
+                  本报告仅用于娱乐与自我探索。请理性对待测算结果，把行动落实到现实生活中。
+                </p>
+                {onReset && (
+                  <button
+                    type="button"
+                    onClick={onReset}
+                    className="shrink-0 text-xs text-slate-500 hover:text-slate-300 transition-colors"
+                  >
+                    重新测算
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

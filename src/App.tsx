@@ -193,6 +193,11 @@ function WizardApp({ user }: { user: User | null }) {
                       /* 静默失败 */
                     }
                   }}
+                  onReset={() => {
+                    setStep1Key((k) => k + 1)
+                    setStep(1)
+                    clearWizardSnapshot()
+                  }}
                 />
               </>
             </Suspense>
@@ -249,6 +254,10 @@ function WizardApp({ user }: { user: User | null }) {
                       } catch {
                         /* 静默失败 */
                       }
+                    }}
+                    onReset={() => {
+                      setHeBanStep(1)
+                      setHeBanResults(null)
                     }}
                   />
               </>
