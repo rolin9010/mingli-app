@@ -23,15 +23,17 @@ import { Step2ChartsSection } from './Step2Results'
 const TOPIC_TABS = [
   { key: 'greeting', label: '开篇', icon: '✦' },
   { key: 'topic1',   label: '能量画像', icon: '🌊' },
-  { key: 'topic2',   label: '情绪关系', icon: '💫' },
-  { key: 'topic3',   label: '事业方向', icon: '🧭' },
-  { key: 'topic4',   label: '突破行动', icon: '🌙' },
-  { key: 'topic5',   label: '身体养护', icon: '🌿' },
+  { key: 'topic2',   label: '情绪特点', icon: '💫' },
+  { key: 'topic3',   label: '人际关系', icon: '🤝' },
+  { key: 'topic4',   label: '事业方向', icon: '🧭' },
+  { key: 'topic5',   label: '子女相关', icon: '🌱' },
+  { key: 'topic6',   label: '身体养护', icon: '🌿' },
+  { key: 'topic7',   label: '行动指南', icon: '🌙' },
 ] as const
 
 type TabKey = (typeof TOPIC_TABS)[number]['key']
 
-/** 将 AI markdown 拆分为开篇 + 五主题 */
+/** 将 AI markdown 拆分为开篇 + 七主题 */
 function parseTopics(markdown: string): Record<TabKey, string> {
   const normalized = normalizeAiReportMarkdown(markdown)
   const { headerNote, greeting, rest } = parseAiOpeningBlocks(normalized)
@@ -42,20 +44,19 @@ function parseTopics(markdown: string): Record<TabKey, string> {
   if (greeting) greetingParts.push(greeting)
   const greetingContent = greetingParts.join('\n\n')
 
-  // 按 ### 主题N: 拆分五个主题
+  // 按 ### 主题N: 拆分七个主题
   const sections: Record<string, string> = {}
-  // 匹配 ### 主题1/一 … ### 主题5/五
-  const chineseNums: Record<string, string> = { '一': '1', '二': '2', '三': '3', '四': '4', '五': '5' }
+  // 匹配 ### 主题1/一 … ### 主题7/七
+  const chineseNums: Record<string, string> = { '一': '1', '二': '2', '三': '3', '四': '4', '五': '5', '六': '6', '七': '7' }
 
-  // 先尝试按 ### 主题[数字/汉字] 分割
-  const topicRegex = /###\s*主题[一二三四五1-5][：:：]?[^\n]*/g
+  // 按 ### 主题[数字/汉字] 分割
+  const topicRegex = /###\s*主题[一二三四五六七1-7][：:：]?[^\n]*/g
   const matches: { index: number; title: string; num: string }[] = []
 
   let m: RegExpExecArray | null
   while ((m = topicRegex.exec(rest)) !== null) {
-    // 提取序号
     const titleText = m[0]
-    const numMatch = titleText.match(/主题([一二三四五1-5])/)
+    const numMatch = titleText.match(/主题([一二三四五六七1-7])/)
     if (!numMatch) continue
     const rawNum = numMatch[1]!
     const num = chineseNums[rawNum] ?? rawNum
@@ -76,6 +77,8 @@ function parseTopics(markdown: string): Record<TabKey, string> {
     topic3: sections['3'] ?? '',
     topic4: sections['4'] ?? '',
     topic5: sections['5'] ?? '',
+    topic6: sections['6'] ?? '',
+    topic7: sections['7'] ?? '',
   }
 }
 
