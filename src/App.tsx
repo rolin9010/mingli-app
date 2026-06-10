@@ -110,7 +110,7 @@ function WizardApp({ user }: { user: User | null }) {
 
       {/* ── 模式切换 Tab（仅在首页/输入页显示） ── */}
       {((mode === 'single' && step === 1) || (mode === 'heban' && heBanStep === 1)) && (
-        <div className="mx-auto max-w-xl px-4 pt-5">
+        <div className="mx-auto max-w-xl px-4 pt-16 sm:pt-5">
           <div className="flex gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-1.5">
             <button
               type="button"
@@ -333,7 +333,7 @@ function UserBar({
   showHistoryButton: boolean
 }) {
   return (
-    <div className="fixed right-4 top-4 z-[100] flex max-w-[calc(100vw-2rem)] flex-wrap items-center justify-end gap-2">
+    <div className="fixed right-3 top-3 z-[100] flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center justify-end gap-1.5 sm:right-4 sm:top-4 sm:gap-2">
       {user ? (
         <>
           <span className="hidden max-w-[10rem] truncate rounded-lg border border-white/10 bg-black/40 px-2.5 py-1.5 text-xs text-amber-100/90 sm:inline-block">
@@ -359,9 +359,11 @@ function UserBar({
           <button
             type="button"
             onClick={() => void signOut().catch(() => {})}
-            className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-xs text-slate-300 hover:border-white/25"
+            className="rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-xs text-slate-300 hover:border-white/25 sm:px-2.5"
+            title="退出登录"
           >
-            退出
+            <span className="hidden sm:inline">退出</span>
+            <span className="sm:hidden">✕</span>
           </button>
         </>
       ) : (
