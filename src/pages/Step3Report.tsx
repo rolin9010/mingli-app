@@ -380,8 +380,23 @@ const text = await fetchAIReading(prompt)
                 </div>
               ) : null}
 
-              {/* done: Tab 切换展示 */}
-              {aiPhase === 'done' && topics ? (
+              {/* done: 快速模式 → 整篇渲染 */}
+              {aiPhase === 'done' && readMode === 'quick' && aiContent ? (() => {
+                const { headerNote, greeting, rest } = parseAiOpeningBlocks(normalizeAiReportMarkdown(aiContent))
+                const fullText = [
+                  headerNote ? `*${headerNote}*` : '',
+                  greeting,
+                  rest,
+                ].filter(Boolean).join('\n\n')
+                return (
+                  <div ref={tabTopRef} className="rounded-2xl border border-amber-900/35 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.06)] sm:p-6" style={READING_PANEL_SURFACE_STYLE}>
+                    <TabContent markdown={fullText} />
+                  </div>
+                )
+              })() : null}
+
+              {/* done: 深度模式 → Tab 分章节展示 */}
+              {aiPhase === 'done' && readMode === 'deep' && topics ? (
                 <div ref={tabTopRef}>
                   {/* Tab 栏 */}
                   <div className="mb-1 flex overflow-x-auto [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
