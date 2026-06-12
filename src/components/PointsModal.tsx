@@ -165,18 +165,6 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                 </div>
               </div>
 
-              {/* 积分用途说明 */}
-              <div className="rounded-xl border border-white/8 bg-white/[0.03] p-4">
-                <div className="text-xs font-medium text-slate-300 mb-2.5">积分用途</div>
-                <ul className="space-y-1.5">
-                  {['AI 五行能量解读（3积分）', 'AI 合盘解读（5积分）', '每日五行贴士（1积分）'].map((item) => (
-                    <li key={item} className="flex items-center gap-2 text-xs text-slate-400">
-                      <span className="h-1 w-1 rounded-full bg-amber-400/50 shrink-0" />
-                      {item}
-                    </li>
-                  ))}
-                </ul>
-              </div>
             </div>
           )}
 
