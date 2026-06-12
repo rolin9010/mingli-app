@@ -490,7 +490,7 @@ export default function HeBanInputPage({
         {/* 单人 / 合盘切换 */}
         {onSwitchMode && (
           <div className="mt-4 flex items-center justify-center">
-            <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+            <div className="flex items-center gap-0.5 rounded-xl border border-white/10 p-1">
               <button
                 type="button"
                 onClick={() => onSwitchMode('single')}
