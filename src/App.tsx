@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import React, { lazy, Suspense, useEffect, useState } from 'react'
 import type { User } from '@supabase/supabase-js'
 import { Navigate, Route, Routes } from 'react-router-dom'
 import { signOut } from './lib/auth'
@@ -66,19 +66,23 @@ function TopNav({
 }) {
   const { balance } = usePoints()
   const [showPointsModal, setShowPointsModal] = useState(false)
+  const [showUserMenu, setShowUserMenu] = useState(false)
+
+  // 点击任何地方关闭下拉
+  const closeMenu = () => setShowUserMenu(false)
 
   return (
     <>
-      <nav className="fixed inset-x-0 top-0 z-[100] h-14 border-b border-white/[0.07] bg-black/75 backdrop-blur-md">
-        <div className="mx-auto flex h-full max-w-6xl items-center justify-between gap-2 px-4 sm:px-6">
+      <nav className="fixed inset-x-0 top-0 z-[100] h-14 border-b border-white/[0.07] bg-black/80 backdrop-blur-md">
+        <div className="mx-auto flex h-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
 
           {/* ── 左：Logo ── */}
           <button
             type="button"
             onClick={onHome}
-            className="flex shrink-0 items-center gap-2 text-left"
+            className="flex shrink-0 items-center gap-2"
           >
-            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-sm font-bold text-slate-900">
+            <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm font-bold text-slate-900 shadow-[0_0_12px_rgba(251,191,36,0.4)]">
               五
             </span>
             <span className="hidden text-sm font-semibold tracking-wide text-amber-100 sm:block">
@@ -86,15 +90,16 @@ function TopNav({
             </span>
           </button>
 
-          {/* ── 中：模式切换（仅非历史页显示） ── */}
-          {!showHistory && (
-            <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+          {/* ── 中：模式切换 + 功能链接 ── */}
+          <div className="flex flex-1 items-center justify-center gap-1 sm:gap-2">
+            {/* 模式切换 */}
+            <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-white/[0.04] p-1">
               <button
                 type="button"
-                onClick={() => onSwitchMode('single')}
+                onClick={() => { onSwitchMode('single'); if (showHistory) onHome() }}
                 className={[
                   'rounded-lg px-3 py-1.5 text-xs font-medium transition',
-                  mode === 'single'
+                  mode === 'single' && !showHistory
                     ? 'bg-amber-400/20 border border-amber-400/40 text-amber-100'
                     : 'text-slate-400 hover:text-slate-200',
                 ].join(' ')}
@@ -103,10 +108,10 @@ function TopNav({
               </button>
               <button
                 type="button"
-                onClick={() => onSwitchMode('heban')}
+                onClick={() => { onSwitchMode('heban'); if (showHistory) onHome() }}
                 className={[
                   'rounded-lg px-3 py-1.5 text-xs font-medium transition',
-                  mode === 'heban'
+                  mode === 'heban' && !showHistory
                     ? 'bg-amber-400/20 border border-amber-400/40 text-amber-100'
                     : 'text-slate-400 hover:text-slate-200',
                 ].join(' ')}
@@ -114,59 +119,107 @@ function TopNav({
                 ☯ 合盘
               </button>
             </div>
-          )}
 
-          {/* ── 右：功能按钮区 ── */}
-          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
-
-            {/* 积分 */}
+            {/* 积分中心 */}
             <button
               type="button"
               onClick={() => setShowPointsModal(true)}
-              className="flex items-center gap-1 rounded-lg border border-amber-400/25 bg-amber-400/10 px-2.5 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-400/20 transition-colors"
+              className="hidden sm:flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-slate-300 hover:text-amber-200 transition-colors"
             >
-              <span className="text-[13px]">💎</span>
-              <span className="tabular-nums">{balance}</span>
-              <span className="hidden sm:inline text-amber-200/70 ml-0.5">积分</span>
+              <svg className="h-4 w-4 text-amber-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="3" fill="currentColor" fillOpacity="0.2"/></svg>
+              <span className="text-xs">积分中心</span>
+              <span className="ml-0.5 rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-300">{balance}</span>
             </button>
 
-            {/* 历史档案 */}
+            {/* 历史记录 */}
             <button
               type="button"
               onClick={showHistory ? onHome : onHistory}
               className={[
-                'rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors',
-                showHistory
-                  ? 'border-white/20 bg-white/10 text-slate-100'
-                  : 'border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20 hover:text-slate-200',
+                'hidden sm:flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs transition-colors',
+                showHistory ? 'text-amber-200' : 'text-slate-300 hover:text-slate-100',
               ].join(' ')}
             >
-              <span className="hidden sm:inline">历史档案</span>
-              <span className="sm:hidden">📂</span>
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
+              历史记录
+            </button>
+          </div>
+
+          {/* ── 右：用户区 ── */}
+          <div className="relative flex shrink-0 items-center gap-2">
+            {/* 移动端积分角标 */}
+            <button
+              type="button"
+              onClick={() => setShowPointsModal(true)}
+              className="flex sm:hidden items-center gap-1 rounded-lg border border-amber-400/25 bg-amber-400/10 px-2 py-1.5 text-xs font-medium text-amber-100"
+            >
+              💎 {balance}
             </button>
 
-            {/* 用户区 */}
             {user ? (
-              <div className="flex items-center gap-1.5">
-                <span className="hidden max-w-[6rem] truncate rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-slate-300 sm:block">
-                  {nicknameOf(user)}
-                </span>
+              <>
                 <button
                   type="button"
-                  onClick={() => void signOut().catch(() => {})}
-                  className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 text-xs text-slate-400 hover:border-white/20 hover:text-slate-200 transition-colors"
-                  title="退出登录"
+                  onClick={() => setShowUserMenu((v) => !v)}
+                  className="flex items-center gap-1.5 rounded-full border border-white/15 bg-white/[0.06] px-3 py-1.5 text-xs font-medium text-slate-200 hover:border-white/25 hover:bg-white/10 transition-all"
                 >
-                  退出
+                  <svg className="h-3.5 w-3.5 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="8" r="4"/><path d="M4 20c0-4 3.6-7 8-7s8 3 8 7"/></svg>
+                  <span className="max-w-[6rem] truncate">{nicknameOf(user)}</span>
+                  <svg
+                    className={`h-3 w-3 text-slate-400 transition-transform ${showUserMenu ? 'rotate-180' : ''}`}
+                    viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
+                  ><path d="M6 9l6 6 6-6"/></svg>
                 </button>
-              </div>
+
+                {/* 下拉菜单 */}
+                {showUserMenu && (
+                  <>
+                    <div className="fixed inset-0 z-10" onClick={closeMenu} />
+                    <div className="absolute right-0 top-full z-20 mt-2 w-44 overflow-hidden rounded-xl border border-white/10 bg-[#111] shadow-2xl">
+                      <div className="px-4 py-3 border-b border-white/8">
+                        <div className="text-xs text-slate-500">当前积分</div>
+                        <div className="mt-0.5 flex items-center gap-1.5">
+                          <svg className="h-4 w-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" fillOpacity="0.3"/></svg>
+                          <span className="text-base font-bold tabular-nums text-amber-300">{balance}</span>
+                          <span className="text-xs text-slate-500">积分</span>
+                        </div>
+                      </div>
+                      <div className="py-1.5">
+                        <DropdownItem
+                          icon={<svg className="h-4 w-4 text-amber-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" fillOpacity="0.2"/></svg>}
+                          label="积分中心"
+                          badge={String(balance)}
+                          onClick={() => { closeMenu(); setShowPointsModal(true) }}
+                        />
+                        <DropdownItem
+                          icon={<svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M1 4v6h6"/><path d="M3.51 15a9 9 0 1 0 .49-4.49"/></svg>}
+                          label="重新测算"
+                          onClick={() => { closeMenu(); onHome() }}
+                        />
+                        <DropdownItem
+                          icon={<svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>}
+                          label="历史记录"
+                          onClick={() => { closeMenu(); onHistory() }}
+                        />
+                        <div className="my-1 border-t border-white/8" />
+                        <DropdownItem
+                          icon={<svg className="h-4 w-4 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>}
+                          label="退出登录"
+                          danger
+                          onClick={() => { closeMenu(); void signOut().catch(() => {}) }}
+                        />
+                      </div>
+                    </div>
+                  </>
+                )}
+              </>
             ) : (
               <button
                 type="button"
                 onClick={onOpenAuth}
-                className="rounded-lg border border-amber-400/45 bg-amber-400/15 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-400/25 transition-colors"
+                className="rounded-full border border-amber-400/50 bg-amber-400/15 px-4 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-400/25 transition-colors"
               >
-                登录
+                登录 / 注册
               </button>
             )}
           </div>
@@ -176,6 +229,38 @@ function TopNav({
       {/* 积分中心弹窗 */}
       <PointsModal open={showPointsModal} onClose={() => setShowPointsModal(false)} />
     </>
+  )
+}
+
+function DropdownItem({
+  icon,
+  label,
+  badge,
+  danger,
+  onClick,
+}: {
+  icon: React.ReactNode
+  label: string
+  badge?: string
+  danger?: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-sm transition-colors hover:bg-white/[0.05] ${
+        danger ? 'text-rose-400' : 'text-slate-200'
+      }`}
+    >
+      <span className="shrink-0">{icon}</span>
+      <span className="flex-1 text-left">{label}</span>
+      {badge && (
+        <span className="rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-300">
+          {badge}
+        </span>
+      )}
+    </button>
   )
 }
 
