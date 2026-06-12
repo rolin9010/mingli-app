@@ -12,6 +12,7 @@ import { getCachedAiReport, setCachedAiReport, clearCachedAiReport } from '../li
 import { usePoints } from '../lib/PointsContext'
 import { POINTS_COST } from '../lib/points'
 import PointsModal, { PointsBadge } from '../components/PointsModal'
+import ConsultModal from '../components/ConsultModal'
 import type { HeBanUserInput, HeBanResults, BaziResult } from '../lib/types'
 import { Step2ChartsSection } from './Step2Results'
 
@@ -218,6 +219,7 @@ export default function HeBanReport({
   const [aiError, setAiError] = useState('')
   const [aiLoadGen, setAiLoadGen] = useState(0)
   const [activeTab, setActiveTab] = useState<HeBanTabKey>('greeting')
+  const [consultOpen, setConsultOpen] = useState(false)
   const tabTopRef = useRef<HTMLDivElement>(null)
 
   const switchTab = (key: HeBanTabKey) => {
@@ -519,16 +521,36 @@ setActiveTab('greeting')
                 </div>
               ) : null}
 
-              <div className="mt-6 border-t border-white/10 pt-4">
+              {/* 底部：免责 + 咨询入口 */}
+              <div className="mt-6 border-t border-white/10 pt-6 space-y-4">
                 <p className="text-center text-xs text-slate-500">
-                  本报告仅用于娱乐与自我探索，请理性对待测算结果。
+                  本测算提供基础分析，若遇人生重大抉择，建议咨询后台客服，获取个性化深度指导。
                 </p>
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setConsultOpen(true)}
+                    className="group flex items-center gap-2 rounded-full border border-amber-400/30 bg-amber-400/8 px-5 py-2.5 text-sm text-amber-300 transition-all hover:border-amber-400/60 hover:bg-amber-400/15 hover:text-amber-200 active:scale-95"
+                  >
+                    <span className="text-base">🔮</span>
+                    立即咨询客服，获取深度指导
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-3.5 w-3.5 opacity-60 group-hover:translate-x-0.5 transition-transform">
+                      <path d="M5 12h14M12 5l7 7-7 7" />
+                    </svg>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
         </div>
       </div>
 
+      {/* 咨询客服对话框 */}
+      <ConsultModal
+        open={consultOpen}
+        onClose={() => setConsultOpen(false)}
+        contextInfo={`合盘报告 - ${input.personA.name} & ${input.personB.name}`}
+      />
     </div>
   )
 }
