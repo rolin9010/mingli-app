@@ -7,6 +7,8 @@ export type ReadingListItem = {
   birth_date: string | null
   created_at: string
   input_data?: UserInput | HeBanUserInput | null
+  /** 非空字符串表示已有 AI 解读 */
+  ai_report?: string | null
 }
 
 export type ReadingDetail = {
@@ -79,7 +81,7 @@ export async function getReadings(): Promise<ReadingListItem[]> {
 
   const { data, error } = await supabase
     .from('readings')
-    .select('id, name, birth_date, created_at, input_data')
+    .select('id, name, birth_date, created_at, input_data, ai_report')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(20)

@@ -452,9 +452,20 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
                   onClick={() => setSelectedId(row.id)}
                   className="flex-1 rounded-xl border border-amber-400/20 bg-white/[0.04] px-4 py-3 text-left transition-colors hover:border-amber-400/40 hover:bg-white/[0.06]"
                 >
-                  {/* 第一行：姓名（左）+ 更新时间（右） */}
+                  {/* 第一行：姓名 + 解读标签（左）+ 更新时间（右） */}
                   <div className="mb-1.5 flex items-center justify-between gap-2">
-                    <span className="font-medium text-amber-100/95 leading-snug">{row.name ?? '未命名'}</span>
+                    <div className="flex min-w-0 items-center gap-1.5">
+                      <span className="font-medium text-amber-100/95 leading-snug truncate">{row.name ?? '未命名'}</span>
+                      {row.ai_report ? (
+                        <span className="shrink-0 rounded-full bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300 leading-none">
+                          已解读
+                        </span>
+                      ) : (
+                        <span className="shrink-0 rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-slate-500 leading-none">
+                          未解读
+                        </span>
+                      )}
+                    </div>
                     <span className="shrink-0 text-[11px] text-slate-500">{updatedAt}</span>
                   </div>
                   {/* 第二行：出生日期（左）+ 四柱（右） */}
