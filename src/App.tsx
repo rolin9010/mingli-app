@@ -315,39 +315,17 @@ function WizardApp({ user }: { user: User | null }) {
 
                 {step === 2 && input && results && (
                   <Suspense fallback={<StepLoading />}>
-                    <>
-                      <div className="mx-auto max-w-6xl px-4">
-                        <div className="mt-2 flex items-center justify-start gap-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setStep1Key((k) => k + 1)
-                              setStep(1)
-                              clearWizardSnapshot()
-                            }}
-                            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 hover:border-white/20"
-                          >
-                            返回修改
-                          </button>
-                        </div>
-                      </div>
-                      <Step3Report
-                        input={input}
-                        results={results}
-                        onAIReportComplete={async (aiReport) => {
-                          try {
-                            await saveReading(input, aiReport)
-                          } catch {
-                            /* 静默失败 */
-                          }
-                        }}
-                        onReset={() => {
-                          setStep1Key((k) => k + 1)
-                          setStep(1)
-                          clearWizardSnapshot()
-                        }}
-                      />
-                    </>
+                    <Step3Report
+                      input={input}
+                      results={results}
+                      onAIReportComplete={async (aiReport) => {
+                        try {
+                          await saveReading(input, aiReport)
+                        } catch {
+                          /* 静默失败 */
+                        }
+                      }}
+                    />
                   </Suspense>
                 )}
               </>
@@ -380,37 +358,17 @@ function WizardApp({ user }: { user: User | null }) {
 
                 {heBanStep === 2 && heBanInput && heBanResults && (
                   <Suspense fallback={<StepLoading />}>
-                    <>
-                      <div className="mx-auto max-w-xl px-4">
-                        <div className="mt-2 flex items-center justify-start gap-3">
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setHeBanStep(1)
-                              setHeBanResults(null)
-                            }}
-                            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 hover:border-white/20"
-                          >
-                            返回修改
-                          </button>
-                        </div>
-                      </div>
-                      <HeBanReport
-                        input={heBanInput}
-                        results={heBanResults}
-                        onAIReportComplete={async (aiReport) => {
-                          try {
-                            await saveHeBanReading(heBanInput, aiReport)
-                          } catch {
-                            /* 静默失败 */
-                          }
-                        }}
-                        onReset={() => {
-                          setHeBanStep(1)
-                          setHeBanResults(null)
-                        }}
-                      />
-                    </>
+                    <HeBanReport
+                      input={heBanInput}
+                      results={heBanResults}
+                      onAIReportComplete={async (aiReport) => {
+                        try {
+                          await saveHeBanReading(heBanInput, aiReport)
+                        } catch {
+                          /* 静默失败 */
+                        }
+                      }}
+                    />
                   </Suspense>
                 )}
               </>

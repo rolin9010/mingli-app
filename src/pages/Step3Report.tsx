@@ -161,12 +161,10 @@ export default function Step3Report({
   input,
   results,
   onAIReportComplete,
-  onReset,
 }: {
   input: UserInput
   results: ReportResults
   onAIReportComplete?: (aiReport: string) => void | Promise<void>
-  onReset?: () => void
 }) {
   const reportFingerprint = useMemo(() => computeAiReportFingerprint(input), [input])
 
@@ -285,14 +283,14 @@ const text = await fetchAIReading(prompt)
   )
 
   return (
-    <div className="mx-auto max-w-6xl px-4 pb-12 pt-8">
+    <div className="mx-auto max-w-3xl px-4 pb-16 pt-6">
       <div id="report" className="space-y-5">
         <div className="space-y-5">
           <Step2ChartsSection input={input} results={results} />
         </div>
 
         {/* AI 解读区 */}
-        <div className="mx-auto w-full max-w-3xl">
+        <div className="w-full">
           <div className="rounded-3xl border border-amber-400/25 bg-amber-400/[0.06] p-6">
             <div className="space-y-5">
               {reportCover}
@@ -451,37 +449,16 @@ const text = await fetchAIReading(prompt)
                 </div>
               ) : null}
 
-              <div className="mt-6 border-t border-white/10 pt-4 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <PointsBadge onClick={() => setShowPointsModal(true)} />
-                  <p className="text-xs leading-6 text-slate-100/70">
-                    本报告仅用于娱乐与自我探索。
-                  </p>
-                </div>
-                {onReset && (
-                  <button
-                    type="button"
-                    onClick={onReset}
-                    className="shrink-0 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                  >
-                    重新测算
-                  </button>
-                )}
+              <div className="mt-6 border-t border-white/10 pt-4">
+                <p className="text-center text-xs text-slate-500">
+                  本报告仅用于娱乐与自我探索，请理性对待测算结果。
+                </p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-6">
-        <button
-          type="button"
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-semibold text-slate-100 hover:border-white/20"
-        >
-          回到顶部
-        </button>
-      </div>
     </div>
   )
 }

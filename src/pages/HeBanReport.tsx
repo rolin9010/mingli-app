@@ -199,12 +199,10 @@ export default function HeBanReport({
   input,
   results,
   onAIReportComplete,
-  onReset,
 }: {
   input: HeBanUserInput
   results: HeBanResults
   onAIReportComplete?: (aiReport: string) => void | Promise<void>
-  onReset?: () => void
 }) {
   const fingerprint = useMemo(() => computeHeBanFingerprint(input), [input])
 
@@ -228,10 +226,6 @@ export default function HeBanReport({
   }
   // 上半部分：切换双方测算的 Tab
   const [activePersonTab, setActivePersonTab] = useState<'A' | 'B'>('A')
-  // 保存状态
-  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved' | 'error'>(
-    getCachedAiReport(fingerprint) ? 'saved' : 'idle',
-  )
 
   useEffect(() => {
     const id = 'mingli-font-noto-serif-sc'
@@ -264,13 +258,9 @@ setActiveTab('greeting')
                   tabTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                 }, 50)
                 setCachedAiReport(fingerprint, text)
-      setSaveStatus('saving')
       try {
         await onAIReportComplete?.(text)
-        setSaveStatus('saved')
-      } catch {
-        setSaveStatus('error')
-      }
+      } catch { /* 静默失败 */ }
     } catch (e: unknown) {
       setAiError(e instanceof Error ? e.message : '解读失败，请重试')
       setAiPhase('error')
@@ -282,7 +272,7 @@ setActiveTab('greeting')
   const relationLabel = input.relation
 
   return (
-    <div className="mx-auto max-w-xl px-4 pb-12 pt-8">
+    <div className="mx-auto max-w-xl px-4 pb-16 pt-6">
       <div className="space-y-5">
 
         {/* ── 上半部分：双方测算结果（Tab 切换） ── */}
@@ -497,51 +487,16 @@ setActiveTab('greeting')
                 </div>
               ) : null}
 
-              {/* 保存记录按钮 */}
-              {aiPhase === 'done' && (
-                <div className="flex items-center justify-end gap-2 border-t border-white/10 pt-4 mt-6">
-                  {saveStatus === 'saved' ? (
-                    <span className="flex items-center gap-1.5 text-xs text-emerald-400">
-                      <span>✓</span> 已保存至历史记录
-                    </span>
-                  ) : saveStatus === 'saving' ? (
-                    <span className="text-xs text-slate-400">保存中…</span>
-                  ) : saveStatus === 'error' ? (
-                    <span className="text-xs text-rose-400">保存失败，请重试</span>
-                  ) : null}
-                </div>
-              )}
-              <div className="mt-4 border-t border-white/10 pt-4 flex items-center justify-between gap-4">
-                <div className="flex items-center gap-3">
-                  <PointsBadge onClick={() => setShowPointsModal(true)} />
-                  <p className="text-xs leading-6 text-slate-100/70">
-                    本报告仅用于娱乐与自我探索。
-                  </p>
-                </div>
-                {onReset && (
-                  <button
-                    type="button"
-                    onClick={onReset}
-                    className="shrink-0 text-xs text-slate-500 hover:text-slate-300 transition-colors"
-                  >
-                    重新测算
-                  </button>
-                )}
+              <div className="mt-6 border-t border-white/10 pt-4">
+                <p className="text-center text-xs text-slate-500">
+                  本报告仅用于娱乐与自我探索，请理性对待测算结果。
+                </p>
               </div>
             </div>
           </div>
         </div>
       </div>
 
-      <div className="mt-6">
-        <button
-          type="button"
-          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
-          className="rounded-xl border border-white/10 bg-white/5 px-5 py-2.5 text-sm font-semibold text-slate-100 hover:border-white/20"
-        >
-          回到顶部
-        </button>
-      </div>
     </div>
   )
 }
