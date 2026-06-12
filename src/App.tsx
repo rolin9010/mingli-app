@@ -5,7 +5,8 @@ import { signOut } from './lib/auth'
 import { saveReading, saveHeBanReading } from './lib/history'
 import { supabase } from './lib/supabase'
 import { clearWizardSnapshot, loadWizardSnapshot, saveWizardSnapshot } from './lib/wizardSession'
-import { PointsProvider } from './lib/PointsContext'
+import { PointsProvider, usePoints } from './lib/PointsContext'
+import PointsModal from './components/PointsModal'
 import Step1Input from './pages/Step1Input'
 import HeBanInputPage from './pages/HeBanInputPage'
 import AuthPage from './pages/AuthPage'
@@ -44,6 +45,142 @@ function nicknameOf(user: User | null): string {
   return user.email?.split('@')[0] ?? '用户'
 }
 
+// ─── 顶部导航栏 ───────────────────────────────────────────────────────────────
+
+function TopNav({
+  user,
+  onOpenAuth,
+  onHistory,
+  onHome,
+  mode,
+  onSwitchMode,
+  showHistory,
+}: {
+  user: User | null
+  onOpenAuth: () => void
+  onHistory: () => void
+  onHome: () => void
+  mode: AppMode
+  onSwitchMode: (m: AppMode) => void
+  showHistory: boolean
+}) {
+  const { balance } = usePoints()
+  const [showPointsModal, setShowPointsModal] = useState(false)
+
+  return (
+    <>
+      <nav className="fixed inset-x-0 top-0 z-[100] h-14 border-b border-white/[0.07] bg-black/75 backdrop-blur-md">
+        <div className="mx-auto flex h-full max-w-6xl items-center justify-between gap-2 px-4 sm:px-6">
+
+          {/* ── 左：Logo ── */}
+          <button
+            type="button"
+            onClick={onHome}
+            className="flex shrink-0 items-center gap-2 text-left"
+          >
+            <span className="flex h-7 w-7 items-center justify-center rounded-full bg-amber-400 text-sm font-bold text-slate-900">
+              五
+            </span>
+            <span className="hidden text-sm font-semibold tracking-wide text-amber-100 sm:block">
+              五行能量
+            </span>
+          </button>
+
+          {/* ── 中：模式切换（仅非历史页显示） ── */}
+          {!showHistory && (
+            <div className="flex items-center gap-1 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+              <button
+                type="button"
+                onClick={() => onSwitchMode('single')}
+                className={[
+                  'rounded-lg px-3 py-1.5 text-xs font-medium transition',
+                  mode === 'single'
+                    ? 'bg-amber-400/20 border border-amber-400/40 text-amber-100'
+                    : 'text-slate-400 hover:text-slate-200',
+                ].join(' ')}
+              >
+                ✦ 单人
+              </button>
+              <button
+                type="button"
+                onClick={() => onSwitchMode('heban')}
+                className={[
+                  'rounded-lg px-3 py-1.5 text-xs font-medium transition',
+                  mode === 'heban'
+                    ? 'bg-amber-400/20 border border-amber-400/40 text-amber-100'
+                    : 'text-slate-400 hover:text-slate-200',
+                ].join(' ')}
+              >
+                ☯ 合盘
+              </button>
+            </div>
+          )}
+
+          {/* ── 右：功能按钮区 ── */}
+          <div className="flex shrink-0 items-center gap-1.5 sm:gap-2">
+
+            {/* 积分 */}
+            <button
+              type="button"
+              onClick={() => setShowPointsModal(true)}
+              className="flex items-center gap-1 rounded-lg border border-amber-400/25 bg-amber-400/10 px-2.5 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-400/20 transition-colors"
+            >
+              <span className="text-[13px]">💎</span>
+              <span className="tabular-nums">{balance}</span>
+              <span className="hidden sm:inline text-amber-200/70 ml-0.5">积分</span>
+            </button>
+
+            {/* 历史档案 */}
+            <button
+              type="button"
+              onClick={showHistory ? onHome : onHistory}
+              className={[
+                'rounded-lg border px-2.5 py-1.5 text-xs font-medium transition-colors',
+                showHistory
+                  ? 'border-white/20 bg-white/10 text-slate-100'
+                  : 'border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20 hover:text-slate-200',
+              ].join(' ')}
+            >
+              <span className="hidden sm:inline">历史档案</span>
+              <span className="sm:hidden">📂</span>
+            </button>
+
+            {/* 用户区 */}
+            {user ? (
+              <div className="flex items-center gap-1.5">
+                <span className="hidden max-w-[6rem] truncate rounded-lg border border-white/10 bg-black/30 px-2 py-1.5 text-xs text-slate-300 sm:block">
+                  {nicknameOf(user)}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => void signOut().catch(() => {})}
+                  className="rounded-lg border border-white/10 bg-white/[0.03] px-2 py-1.5 text-xs text-slate-400 hover:border-white/20 hover:text-slate-200 transition-colors"
+                  title="退出登录"
+                >
+                  退出
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={onOpenAuth}
+                className="rounded-lg border border-amber-400/45 bg-amber-400/15 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-400/25 transition-colors"
+              >
+                登录
+              </button>
+            )}
+          </div>
+        </div>
+      </nav>
+
+      {/* 积分中心弹窗 */}
+      <PointsModal open={showPointsModal} onClose={() => setShowPointsModal(false)} />
+    </>
+  )
+}
+
+// ─── 主应用 ────────────────────────────────────────────────────────────────────
+
 function WizardApp({ user }: { user: User | null }) {
   const w0 = loadWizardSnapshot()
   const [mode, setMode] = useState<AppMode>('single')
@@ -63,7 +200,6 @@ function WizardApp({ user }: { user: User | null }) {
   const [showHistory, setShowHistory] = useState(false)
 
   useEffect(() => {
-    /** 第 2 步：刷新后仍停留在报告页并命中缓存 */
     if (step === 2 && input && results) {
       saveWizardSnapshot(2, input, results)
     }
@@ -71,6 +207,7 @@ function WizardApp({ user }: { user: User | null }) {
 
   const switchMode = (newMode: AppMode) => {
     setMode(newMode)
+    setShowHistory(false)
     if (newMode === 'single') {
       setHeBanStep(1)
       setHeBanInput(null)
@@ -82,193 +219,167 @@ function WizardApp({ user }: { user: User | null }) {
     }
   }
 
-  if (showHistory) {
-    return (
-      <div className="min-h-screen">
-        <UserBar
-          user={user}
-          onOpenAuth={() => setShowAuth(true)}
-          onHistory={() => setShowHistory(true)}
-          onHome={() => setShowHistory(false)}
-          showHistoryButton={false}
-        />
-        {showAuth ? <AuthModal onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} /> : null}
-        <HistoryPage onBack={() => setShowHistory(false)} />
-      </div>
-    )
+  const goHome = () => {
+    setShowHistory(false)
+    setStep1Key((k) => k + 1)
+    setStep(1)
+    setHeBanStep(1)
+    setHeBanResults(null)
+    clearWizardSnapshot()
   }
 
   return (
     <div className="min-h-screen">
-      <UserBar
+      <TopNav
         user={user}
         onOpenAuth={() => setShowAuth(true)}
         onHistory={() => setShowHistory(true)}
-        onHome={() => setShowHistory(false)}
-        showHistoryButton
+        onHome={goHome}
+        mode={mode}
+        onSwitchMode={switchMode}
+        showHistory={showHistory}
       />
       {showAuth ? <AuthModal onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} /> : null}
 
-      {/* ── 模式切换 Tab（仅在首页/输入页显示） ── */}
-      {((mode === 'single' && step === 1) || (mode === 'heban' && heBanStep === 1)) && (
-        <div className="mx-auto max-w-xl px-4 pt-16 sm:pt-5">
-          <div className="flex gap-2 rounded-2xl border border-white/10 bg-white/[0.03] p-1.5">
-            <button
-              type="button"
-              onClick={() => switchMode('single')}
-              className={[
-                'flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition',
-                mode === 'single'
-                  ? 'bg-amber-400/20 border border-amber-400/50 text-amber-100'
-                  : 'text-slate-400 hover:text-slate-200',
-              ].join(' ')}
-            >
-              ✦ 单人测算
-            </button>
-            <button
-              type="button"
-              onClick={() => switchMode('heban')}
-              className={[
-                'flex-1 rounded-xl px-4 py-2.5 text-sm font-medium transition',
-                mode === 'heban'
-                  ? 'bg-amber-400/20 border border-amber-400/50 text-amber-100'
-                  : 'text-slate-400 hover:text-slate-200',
-              ].join(' ')}
-            >
-              ☯ 合盘
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ── 单人测算流程 ── */}
-      {mode === 'single' && (
-        <>
-          {step === 1 && (
-            <Step1Input
-              key={step1Key}
-              initialValues={step1Key > 0 ? input : null}
-              isSubmitting={isComputing}
-              onNext={async (data) => {
-                if (isComputing) return
-                setIsComputing(true)
-                try {
-                  const { computeAll } = await import('./lib/mingli/computeReport')
-                  const res = computeAll(data)
-                  setInput(data)
-                  setResults(res)
-                  setStep(2)
-                  saveWizardSnapshot(2, data, res)
-                } finally {
-                  setIsComputing(false)
-                }
-              }}
-            />
-          )}
-
-          {step === 2 && input && results && (
-            <Suspense fallback={<StepLoading />}>
+      {/* 内容区域，padding-top 留出 nav 高度 */}
+      <div className="pt-14">
+        {showHistory ? (
+          <HistoryPage onBack={() => setShowHistory(false)} />
+        ) : (
+          <>
+            {/* ── 单人测算流程 ── */}
+            {mode === 'single' && (
               <>
-                <div className="mx-auto max-w-6xl px-4">
-                  <div className="mt-2 flex items-center justify-start gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setStep1Key((k) => k + 1)
-                        setStep(1)
-                        clearWizardSnapshot()
-                      }}
-                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 hover:border-white/20"
-                    >
-                      返回修改
-                    </button>
-                  </div>
-                </div>
-                <Step3Report
-                  input={input}
-                  results={results}
-                  onAIReportComplete={async (aiReport) => {
-                    try {
-                      await saveReading(input, aiReport)
-                    } catch {
-                      /* 静默失败 */
-                    }
-                  }}
-                  onReset={() => {
-                    setStep1Key((k) => k + 1)
-                    setStep(1)
-                    clearWizardSnapshot()
-                  }}
-                />
-              </>
-            </Suspense>
-          )}
-        </>
-      )}
-
-      {/* ── 合盘流程 ── */}
-      {mode === 'heban' && (
-        <>
-          {heBanStep === 1 && (
-            <HeBanInputPage
-              isSubmitting={isHeBanComputing}
-              onNext={async (data) => {
-                if (isHeBanComputing) return
-                setIsHeBanComputing(true)
-                try {
-                  const { computeAll } = await import('./lib/mingli/computeReport')
-                  const resultA = computeAll(data.personA)
-                  const resultB = computeAll(data.personB)
-                  setHeBanInput(data)
-                  setHeBanResults({ resultA, resultB })
-                  setHeBanStep(2)
-                } finally {
-                  setIsHeBanComputing(false)
-                }
-              }}
-            />
-          )}
-
-          {heBanStep === 2 && heBanInput && heBanResults && (
-            <Suspense fallback={<StepLoading />}>
-              <>
-                <div className="mx-auto max-w-xl px-4">
-                  <div className="mt-2 flex items-center justify-start gap-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setHeBanStep(1)
-                        setHeBanResults(null)
-                      }}
-                      className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 hover:border-white/20"
-                    >
-                      返回修改
-                    </button>
-                  </div>
-                </div>
-                <HeBanReport
-                    input={heBanInput}
-                    results={heBanResults}
-                    onAIReportComplete={async (aiReport) => {
+                {step === 1 && (
+                  <Step1Input
+                    key={step1Key}
+                    initialValues={step1Key > 0 ? input : null}
+                    isSubmitting={isComputing}
+                    onNext={async (data) => {
+                      if (isComputing) return
+                      setIsComputing(true)
                       try {
-                        await saveHeBanReading(heBanInput, aiReport)
-                      } catch {
-                        /* 静默失败 */
+                        const { computeAll } = await import('./lib/mingli/computeReport')
+                        const res = computeAll(data)
+                        setInput(data)
+                        setResults(res)
+                        setStep(2)
+                        saveWizardSnapshot(2, data, res)
+                      } finally {
+                        setIsComputing(false)
                       }
                     }}
-                    onReset={() => {
-                      setHeBanStep(1)
-                      setHeBanResults(null)
+                  />
+                )}
+
+                {step === 2 && input && results && (
+                  <Suspense fallback={<StepLoading />}>
+                    <>
+                      <div className="mx-auto max-w-6xl px-4">
+                        <div className="mt-2 flex items-center justify-start gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setStep1Key((k) => k + 1)
+                              setStep(1)
+                              clearWizardSnapshot()
+                            }}
+                            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 hover:border-white/20"
+                          >
+                            返回修改
+                          </button>
+                        </div>
+                      </div>
+                      <Step3Report
+                        input={input}
+                        results={results}
+                        onAIReportComplete={async (aiReport) => {
+                          try {
+                            await saveReading(input, aiReport)
+                          } catch {
+                            /* 静默失败 */
+                          }
+                        }}
+                        onReset={() => {
+                          setStep1Key((k) => k + 1)
+                          setStep(1)
+                          clearWizardSnapshot()
+                        }}
+                      />
+                    </>
+                  </Suspense>
+                )}
+              </>
+            )}
+
+            {/* ── 合盘流程 ── */}
+            {mode === 'heban' && (
+              <>
+                {heBanStep === 1 && (
+                  <HeBanInputPage
+                    isSubmitting={isHeBanComputing}
+                    onNext={async (data) => {
+                      if (isHeBanComputing) return
+                      setIsHeBanComputing(true)
+                      try {
+                        const { computeAll } = await import('./lib/mingli/computeReport')
+                        const resultA = computeAll(data.personA)
+                        const resultB = computeAll(data.personB)
+                        setHeBanInput(data)
+                        setHeBanResults({ resultA, resultB })
+                        setHeBanStep(2)
+                      } finally {
+                        setIsHeBanComputing(false)
+                      }
                     }}
                   />
+                )}
+
+                {heBanStep === 2 && heBanInput && heBanResults && (
+                  <Suspense fallback={<StepLoading />}>
+                    <>
+                      <div className="mx-auto max-w-xl px-4">
+                        <div className="mt-2 flex items-center justify-start gap-3">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setHeBanStep(1)
+                              setHeBanResults(null)
+                            }}
+                            className="rounded-xl border border-white/10 bg-white/5 px-4 py-2 text-sm font-semibold text-slate-100 hover:border-white/20"
+                          >
+                            返回修改
+                          </button>
+                        </div>
+                      </div>
+                      <HeBanReport
+                        input={heBanInput}
+                        results={heBanResults}
+                        onAIReportComplete={async (aiReport) => {
+                          try {
+                            await saveHeBanReading(heBanInput, aiReport)
+                          } catch {
+                            /* 静默失败 */
+                          }
+                        }}
+                        onReset={() => {
+                          setHeBanStep(1)
+                          setHeBanResults(null)
+                        }}
+                      />
+                    </>
+                  </Suspense>
+                )}
               </>
-            </Suspense>
-          )}
-        </>
-      )}
+            )}
+          </>
+        )}
+      </div>
     </div>
   )
 }
+
+// ─── 根组件 ───────────────────────────────────────────────────────────────────
 
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
@@ -322,77 +433,7 @@ export default function App() {
   )
 }
 
-function UserBar({
-  user,
-  onOpenAuth,
-  onHistory,
-  onHome,
-  showHistoryButton,
-}: {
-  user: User | null
-  onOpenAuth: () => void
-  onHistory: () => void
-  onHome: () => void
-  showHistoryButton: boolean
-}) {
-  return (
-    <div className="fixed right-3 top-3 z-[100] flex max-w-[calc(100vw-1.5rem)] flex-wrap items-center justify-end gap-1.5 sm:right-4 sm:top-4 sm:gap-2">
-      {user ? (
-        <>
-          <span className="hidden max-w-[10rem] truncate rounded-lg border border-white/10 bg-black/40 px-2.5 py-1.5 text-xs text-amber-100/90 sm:inline-block">
-            {nicknameOf(user)}
-          </span>
-          {showHistoryButton ? (
-            <button
-              type="button"
-              onClick={onHistory}
-              className="rounded-lg border border-amber-400/35 bg-amber-400/10 px-2.5 py-1.5 text-xs font-medium text-amber-100 hover:bg-amber-400/20"
-            >
-              档案
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={onHome}
-              className="rounded-lg border border-white/15 bg-white/5 px-2.5 py-1.5 text-xs font-medium text-slate-200 hover:border-white/25"
-            >
-              测算首页
-            </button>
-          )}
-          <button
-            type="button"
-            onClick={() => void signOut().catch(() => {})}
-            className="rounded-lg border border-white/15 bg-white/5 px-2 py-1.5 text-xs text-slate-300 hover:border-white/25 sm:px-2.5"
-            title="退出登录"
-          >
-            <span className="hidden sm:inline">退出</span>
-            <span className="sm:hidden">✕</span>
-          </button>
-        </>
-      ) : (
-        <>
-          <button
-            type="button"
-            onClick={onOpenAuth}
-            className="rounded-lg border border-amber-400/45 bg-amber-400/15 px-3 py-1.5 text-xs font-semibold text-amber-100 hover:bg-amber-400/25"
-          >
-            登录 / 注册
-          </button>
-          {showHistoryButton ? (
-            <button
-              type="button"
-              onClick={onHistory}
-              className="rounded-lg border border-white/10 bg-white/5 px-2.5 py-1.5 text-xs text-slate-400 hover:border-white/20 hover:text-slate-200"
-              title="登录后可同步档案"
-            >
-              档案
-            </button>
-          ) : null}
-        </>
-      )}
-    </div>
-  )
-}
+// ─── 登录弹窗 ─────────────────────────────────────────────────────────────────
 
 function AuthModal({
   onClose,
