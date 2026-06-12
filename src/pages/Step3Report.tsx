@@ -333,7 +333,7 @@ const text = await fetchAIReading(prompt)
               <PointsModal
                 open={showPointsModal}
                 onClose={() => setShowPointsModal(false)}
-                defaultTab={balance < POINTS_COST.AI_READING ? 'recharge' : 'checkin'}
+                defaultTab={balance < POINTS_COST.AI_READING ? 'buy' : 'checkin'}
               />
 
               {/* loading */}

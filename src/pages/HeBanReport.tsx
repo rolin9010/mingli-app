@@ -376,7 +376,7 @@ setActiveTab('greeting')
               <PointsModal
                 open={showPointsModal}
                 onClose={() => setShowPointsModal(false)}
-                defaultTab={balance < POINTS_COST.HEBAN_READING ? 'recharge' : 'checkin'}
+                defaultTab={balance < POINTS_COST.HEBAN_READING ? 'buy' : 'checkin'}
               />
 
               {/* loading */}
