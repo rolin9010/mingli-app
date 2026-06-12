@@ -9,6 +9,9 @@ import {
 } from '../lib/aiReportMarkdown'
 import { buildHeBanPrompt, fetchHeBanAIReading } from '../lib/ai'
 import { getCachedAiReport, setCachedAiReport, clearCachedAiReport } from '../lib/aiReportCache'
+import { usePoints } from '../lib/PointsContext'
+import { POINTS_COST } from '../lib/points'
+import PointsModal, { PointsBadge } from '../components/PointsModal'
 import type { HeBanUserInput, HeBanResults, BaziResult } from '../lib/types'
 import { Step2ChartsSection } from './Step2Results'
 
@@ -205,6 +208,8 @@ export default function HeBanReport({
 }) {
   const fingerprint = useMemo(() => computeHeBanFingerprint(input), [input])
 
+  const { balance, doConsume } = usePoints()
+  const [showPointsModal, setShowPointsModal] = useState(false)
   const [aiContent, setAiContent] = useState(() => getCachedAiReport(fingerprint) ?? '')
   const [aiPhase, setAiPhase] = useState<'idle' | 'loading' | 'done' | 'error'>(() =>
     getCachedAiReport(fingerprint) ? 'done' : 'idle',
@@ -334,18 +339,45 @@ setActiveTab('greeting')
                 </div>
               </div>
 
-              {/* idle */}
+              {/* idle → 积分消耗按钮 */}
               {aiPhase === 'idle' ? (
-                <div className="flex flex-col items-center justify-center py-12">
+                <div className="flex flex-col items-center justify-center gap-4 py-12">
+                  <div className="flex items-center gap-2 text-sm text-slate-400">
+                    <PointsBadge onClick={() => setShowPointsModal(true)} />
+                  </div>
                   <button
                     type="button"
-                    onClick={() => void startAiReading()}
-                    className="rounded-xl border border-amber-400/60 bg-amber-400/20 px-8 py-3 text-sm font-semibold text-amber-100 shadow-[inset_0_1px_0_rgba(251,191,36,0.15)] hover:bg-amber-400/30"
+                    onClick={() => {
+                      const cost = POINTS_COST.HEBAN_READING
+                      if (balance >= cost) {
+                        const ok = doConsume(cost, 'consume_heban', `合盘解读 - ${nameA}×${nameB}`)
+                        if (ok) void startAiReading()
+                      } else {
+                        setShowPointsModal(true)
+                      }
+                    }}
+                    className={`relative overflow-hidden rounded-xl border px-8 py-3 text-sm font-semibold transition-all ${
+                      balance >= POINTS_COST.HEBAN_READING
+                        ? 'border-amber-400/50 bg-amber-400/15 text-amber-100 shadow-[inset_0_1px_0_rgba(251,191,36,0.15),0_0_20px_rgba(251,191,36,0.1)] hover:bg-amber-400/25 active:scale-[0.98]'
+                        : 'border-rose-400/30 bg-rose-400/10 text-rose-200 hover:bg-rose-400/20'
+                    }`}
                   >
-                    查看 AI 合盘解读报告
+                    <span className="flex items-center gap-2">
+                      <span>💎 {POINTS_COST.HEBAN_READING}</span>
+                      <span className="h-3 w-px bg-white/20" />
+                      <span>{balance >= POINTS_COST.HEBAN_READING ? '开启合盘解读' : '积分不足，去充值'}</span>
+                    </span>
                   </button>
+                  <p className="text-[11px] text-slate-500">消耗 {POINTS_COST.HEBAN_READING} 积分解锁完整 AI 合盘解读</p>
                 </div>
               ) : null}
+
+              {/* 积分中心弹窗 */}
+              <PointsModal
+                open={showPointsModal}
+                onClose={() => setShowPointsModal(false)}
+                defaultTab={balance < POINTS_COST.HEBAN_READING ? 'recharge' : 'checkin'}
+              />
 
               {/* loading */}
               {aiPhase === 'loading' ? <AiLoading key={aiLoadGen} estimatedSeconds={50} /> : null}
@@ -454,9 +486,12 @@ setActiveTab('greeting')
                 </div>
               )}
               <div className="mt-4 border-t border-white/10 pt-4 flex items-center justify-between gap-4">
-                <p className="text-xs leading-6 text-slate-100/70">
-                  本报告仅用于娱乐与自我探索。请理性对待测算结果，把行动落实到现实生活中。
-                </p>
+                <div className="flex items-center gap-3">
+                  <PointsBadge onClick={() => setShowPointsModal(true)} />
+                  <p className="text-xs leading-6 text-slate-100/70">
+                    本报告仅用于娱乐与自我探索。
+                  </p>
+                </div>
                 {onReset && (
                   <button
                     type="button"

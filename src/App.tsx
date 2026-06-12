@@ -5,6 +5,7 @@ import { signOut } from './lib/auth'
 import { saveReading, saveHeBanReading } from './lib/history'
 import { supabase } from './lib/supabase'
 import { clearWizardSnapshot, loadWizardSnapshot, saveWizardSnapshot } from './lib/wizardSession'
+import { PointsProvider } from './lib/PointsContext'
 import Step1Input from './pages/Step1Input'
 import HeBanInputPage from './pages/HeBanInputPage'
 import AuthPage from './pages/AuthPage'
@@ -303,19 +304,21 @@ export default function App() {
   }, [])
 
   return (
-    <Routes>
-      <Route
-        path="/"
-        element={
-          <PrivateRoute>
-            {authChecked ? <WizardApp user={user} /> : <AuthLoading />}
-          </PrivateRoute>
-        }
-      />
-      <Route path="/login" element={<LoginPage />} />
-      <Route path="/register" element={<RegisterPage />} />
-      <Route path="*" element={<Navigate to="/" replace />} />
-    </Routes>
+    <PointsProvider>
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <PrivateRoute>
+              {authChecked ? <WizardApp user={user} /> : <AuthLoading />}
+            </PrivateRoute>
+          }
+        />
+        <Route path="/login" element={<LoginPage />} />
+        <Route path="/register" element={<RegisterPage />} />
+        <Route path="*" element={<Navigate to="/" replace />} />
+      </Routes>
+    </PointsProvider>
   )
 }
 
