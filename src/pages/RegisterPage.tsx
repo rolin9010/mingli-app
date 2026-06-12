@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useMemo, type FormEvent } from 'react'
 import { Link } from 'react-router-dom'
 import { supabase } from '../lib/supabase'
 import type { AuthError } from '@supabase/supabase-js'
@@ -11,6 +11,12 @@ export default function RegisterPage() {
   const [error, setError] = useState<string>('')
   const [mailSent, setMailSent] = useState(false)
   const [countdown, setCountdown] = useState(0)
+
+  // 从 URL 读取邀请人 ID
+  const referrerId = useMemo(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('ref') ?? undefined
+  }, [])
 
   const toFriendlyError = (message: string): string => {
     const m = message.toLowerCase()
@@ -34,6 +40,9 @@ export default function RegisterPage() {
         password,
         options: {
           emailRedirectTo: `${window.location.origin}/login`,
+          data: {
+            ...(referrerId ? { referrer_id: referrerId } : {}),
+          },
         },
       })
       if (authError) throw authError

@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useState, useMemo, type FormEvent } from 'react'
 import { signIn, signUp } from '../lib/auth'
 
 export interface AuthPageProps {
@@ -13,6 +13,12 @@ export default function AuthPage({ onSuccess }: AuthPageProps) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
 
+  // 从 URL 读取邀请人 ID
+  const referrerId = useMemo(() => {
+    const params = new URLSearchParams(window.location.search)
+    return params.get('ref') ?? undefined
+  }, [])
+
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault()
     setError('')
@@ -26,7 +32,7 @@ export default function AuthPage({ onSuccess }: AuthPageProps) {
           setLoading(false)
           return
         }
-        await signUp(email.trim(), password, nickname.trim())
+        await signUp(email.trim(), password, nickname.trim(), referrerId)
       }
       onSuccess()
     } catch (err: unknown) {

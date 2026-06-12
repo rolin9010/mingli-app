@@ -1,6 +1,8 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import type React from 'react'
 import { usePoints } from '../lib/PointsContext'
+import { getInviteStats } from '../lib/points'
+import { supabase } from '../lib/supabase'
 
 // ─── 常规购买套餐（参考图） ───────────────────────────────────────────────────
 const RECHARGE_PACKS = [
@@ -80,6 +82,23 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
   const [recharging, setRecharging] = useState<number | null>(null)
   const [checkingIn, setCheckingIn] = useState(false)
 
+  // 邀请统计
+  const [inviteStats, setInviteStats] = useState<{ count: number; totalPoints: number } | null>(null)
+  const [inviteLink, setInviteLink] = useState<string>('')
+  const [copied, setCopied] = useState(false)
+
+  // 打开时加载邀请数据
+  useEffect(() => {
+    if (!open) return
+    // 获取当前用户 ID 拼接邀请链接
+    supabase.auth.getUser().then(({ data }) => {
+      if (data.user) {
+        setInviteLink(`${window.location.origin}/?ref=${data.user.id}`)
+      }
+    })
+    getInviteStats().then(setInviteStats)
+  }, [open])
+
   if (!open) return null
 
   const handleRecharge = async (points: number) => {
@@ -92,6 +111,13 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
     setCheckingIn(true)
     await doCheckIn()
     setCheckingIn(false)
+  }
+
+  const handleCopy = async () => {
+    if (!inviteLink) return
+    await navigator.clipboard?.writeText(inviteLink)
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
   }
 
   return (
@@ -188,9 +214,10 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
           {/* 赚积分 */}
           {tab === 'earn' && (
             <div className="p-4">
-              <div className="rounded-2xl border border-white/8 bg-[#1a1a1a] p-4">
-                {/* 说明文字 */}
-                <div className="flex items-start gap-3 mb-4">
+              <div className="rounded-2xl border border-white/8 bg-[#1a1a1a] p-4 space-y-4">
+
+                {/* 说明 */}
+                <div className="flex items-start gap-3">
                   <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-amber-400/10 border border-amber-400/20">
                     <svg className="h-5 w-5 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
                       <path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/>
@@ -198,39 +225,61 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                       <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
                     </svg>
                   </div>
-                  <p className="text-xs text-slate-300 leading-relaxed pt-1">
-                    每邀请 1 位新用户注册，您和对方都可额外获得 <span className="font-bold text-amber-300">3</span> 积分。
-                  </p>
+                  <div>
+                    <p className="text-xs font-semibold text-slate-100 mb-1">邀请好友注册</p>
+                    <p className="text-[11px] text-slate-400 leading-relaxed">
+                      每邀请 1 位新用户注册，<span className="text-amber-300 font-semibold">双方各得 3 积分</span>。
+                    </p>
+                  </div>
                 </div>
 
                 {/* 邀请链接 */}
-                <div className="rounded-xl border border-white/8 bg-[#111] p-3 flex items-center gap-2 mb-3">
-                  <span className="flex-1 truncate text-xs text-slate-400 font-mono">
-                    {window.location.origin}/?ref=invite
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => void navigator.clipboard?.writeText(window.location.origin + '/?ref=invite')}
-                    className="shrink-0 flex items-center gap-1 rounded-lg bg-amber-400/15 border border-amber-400/25 px-3 py-1.5 text-[11px] font-medium text-amber-200 hover:bg-amber-400/25 transition-colors"
-                  >
-                    <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/>
-                    </svg>
-                    复制
-                  </button>
+                <div>
+                  <div className="text-[11px] text-slate-500 mb-1.5">你的专属邀请链接</div>
+                  <div className="rounded-xl border border-white/8 bg-[#111] p-3 flex items-center gap-2">
+                    <span className="flex-1 truncate text-[11px] text-slate-400 font-mono">
+                      {inviteLink || `${window.location.origin}/?ref=...`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => void handleCopy()}
+                      disabled={!inviteLink}
+                      className={`shrink-0 flex items-center gap-1 rounded-lg border px-3 py-1.5 text-[11px] font-medium transition-all ${
+                        copied
+                          ? 'border-emerald-500/40 bg-emerald-500/15 text-emerald-300'
+                          : 'border-amber-400/25 bg-amber-400/15 text-amber-200 hover:bg-amber-400/25 disabled:opacity-40'
+                      }`}
+                    >
+                      {copied ? (
+                        <><svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><polyline points="20 6 9 17 4 12"/></svg>已复制</>
+                      ) : (
+                        <><svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>复制</>
+                      )}
+                    </button>
+                  </div>
                 </div>
 
                 {/* 统计数字 */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-xl border border-white/8 bg-[#111] px-4 py-3">
                     <div className="text-[11px] text-slate-500 mb-1">已邀请注册</div>
-                    <div className="text-xl font-bold text-slate-200">0</div>
+                    <div className="text-xl font-bold text-slate-200">
+                      {inviteStats === null ? <span className="animate-pulse text-slate-600">--</span> : inviteStats.count}
+                    </div>
                   </div>
                   <div className="rounded-xl border border-white/8 bg-[#111] px-4 py-3">
                     <div className="text-[11px] text-slate-500 mb-1">累计赚取积分</div>
-                    <div className="text-xl font-bold text-slate-200">0</div>
+                    <div className="text-xl font-bold text-amber-300">
+                      {inviteStats === null ? <span className="animate-pulse text-slate-600">--</span> : `+${inviteStats.totalPoints}`}
+                    </div>
                   </div>
                 </div>
+
+                {/* 使用说明 */}
+                <div className="rounded-xl border border-white/6 bg-black/20 px-3 py-2.5 text-[11px] text-slate-500 leading-relaxed">
+                  💡 对方通过你的链接访问并完成注册后，积分将自动发放。每位用户只能被邀请一次。
+                </div>
+
               </div>
             </div>
           )}

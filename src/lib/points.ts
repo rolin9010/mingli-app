@@ -24,6 +24,28 @@ export interface PointsRecord {
   createdAt: string
 }
 
+/** 查询邀请统计（邀请人数 + 累计获得积分） */
+export async function getInviteStats(): Promise<{ count: number; totalPoints: number }> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return { count: 0, totalPoints: 0 }
+
+  const [invitesRes, pointsRes] = await Promise.all([
+    supabase
+      .from('invites')
+      .select('id', { count: 'exact', head: true })
+      .eq('inviter_id', user.id),
+    supabase
+      .from('points_records')
+      .select('amount')
+      .eq('user_id', user.id)
+      .eq('type', 'invite'),
+  ])
+
+  const count = invitesRes.count ?? 0
+  const totalPoints = (pointsRes.data ?? []).reduce((sum, r) => sum + r.amount, 0)
+  return { count, totalPoints }
+}
+
 /** 积分消耗常量 */
 export const POINTS_COST = {
   AI_READING_QUICK: 3,    // AI 快速解读
