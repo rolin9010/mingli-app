@@ -153,15 +153,15 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                     </svg>
                   </div>
                   <div>
-                    <div className="text-sm font-semibold text-slate-100">每日签到</div>
-                    <div className="text-xs text-slate-500 mt-0.5">每天签到获得1积分</div>
+                    <div className="text-xs font-semibold text-slate-100">每日签到</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">每天签到获得1积分</div>
                   </div>
                 </div>
                 <button
                   type="button"
                   disabled={checkedInToday}
                   onClick={() => doCheckIn()}
-                  className={`w-full rounded-xl py-4 text-sm font-semibold transition-all ${
+                  className={`w-full rounded-xl py-3 text-xs font-semibold transition-all ${
                     checkedInToday
                       ? 'bg-emerald-600/25 border border-emerald-500/30 text-emerald-300'
                       : 'bg-amber-400/15 border border-amber-400/30 text-amber-100 hover:bg-amber-400/25 active:scale-[0.98]'
@@ -186,7 +186,7 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                       <path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/>
                     </svg>
                   </div>
-                  <p className="text-sm text-slate-300 leading-relaxed pt-1">
+                  <p className="text-xs text-slate-300 leading-relaxed pt-1">
                     每邀请 1 位新用户注册，您和对方都可额外获得 <span className="font-bold text-amber-300">3</span> 积分。
                   </p>
                 </div>
@@ -211,12 +211,12 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                 {/* 统计数字 */}
                 <div className="grid grid-cols-2 gap-2">
                   <div className="rounded-xl border border-white/8 bg-[#111] px-4 py-3">
-                    <div className="text-xs text-slate-500 mb-1">已邀请注册</div>
-                    <div className="text-2xl font-bold text-slate-200">0</div>
+                    <div className="text-[11px] text-slate-500 mb-1">已邀请注册</div>
+                    <div className="text-xl font-bold text-slate-200">0</div>
                   </div>
                   <div className="rounded-xl border border-white/8 bg-[#111] px-4 py-3">
-                    <div className="text-xs text-slate-500 mb-1">累计赚取积分</div>
-                    <div className="text-2xl font-bold text-slate-200">0</div>
+                    <div className="text-[11px] text-slate-500 mb-1">累计赚取积分</div>
+                    <div className="text-xl font-bold text-slate-200">0</div>
                   </div>
                 </div>
               </div>
@@ -233,14 +233,14 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                     type="button"
                     disabled={recharging !== null}
                     onClick={() => void handleRecharge(pack.points)}
-                    className={`relative flex flex-col rounded-2xl border border-[#333] bg-[#1a1a1a] p-4 text-left transition-all hover:border-amber-400/30 hover:bg-[#1e1e1e] active:scale-[0.98] ${
+                    className={`relative flex flex-col rounded-2xl border border-[#333] bg-[#1a1a1a] p-3 text-left transition-all hover:border-amber-400/30 hover:bg-[#1e1e1e] active:scale-[0.98] ${
                       recharging === pack.points ? 'opacity-60 animate-pulse' : ''
                     }`}
                   >
                     <CoinIcon size="sm" />
-                    <div className="mt-3 text-xl font-bold text-amber-300">{pack.price}</div>
-                    <div className="mt-1 text-sm font-medium text-slate-200">{pack.points} 积分</div>
-                    <div className="mt-0.5 text-[11px] text-slate-500">¥{pack.unit}/积分</div>
+                    <div className="mt-2 text-lg font-bold text-amber-300">{pack.price}</div>
+                    <div className="mt-0.5 text-xs font-medium text-slate-200">{pack.points} 积分</div>
+                    <div className="mt-0.5 text-[10px] text-slate-500">¥{pack.unit}/积分</div>
                   </button>
                 ))}
               </div>
@@ -257,15 +257,15 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                   {records.map((record) => (
                     <div key={record.id} className="flex items-center justify-between py-4">
                       <div>
-                        <div className="text-sm text-slate-200">{record.description}</div>
-                        <div className="mt-0.5 text-xs text-slate-600">
+                        <div className="text-xs text-slate-200">{record.description}</div>
+                        <div className="mt-0.5 text-[11px] text-slate-600">
                           {new Date(record.createdAt).toLocaleString('zh-CN', {
                             year: 'numeric', month: 'numeric', day: 'numeric',
                             hour: '2-digit', minute: '2-digit', second: '2-digit',
                           })}
                         </div>
                       </div>
-                      <span className={`text-base font-bold tabular-nums ${record.amount > 0 ? 'text-amber-300' : 'text-rose-400'}`}>
+                      <span className={`text-sm font-bold tabular-nums ${record.amount > 0 ? 'text-amber-300' : 'text-rose-400'}`}>
                         {record.amount > 0 ? '+' : ''}{record.amount}
                       </span>
                     </div>
