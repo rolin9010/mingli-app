@@ -166,18 +166,20 @@ export default function Step3Report({
   results: ReportResults
   onAIReportComplete?: (aiReport: string) => void | Promise<void>
 }) {
-  const reportFingerprint = useMemo(() => computeAiReportFingerprint(input), [input])
+  const baseFingerprint = useMemo(() => computeAiReportFingerprint(input), [input])
+  const [readMode, setReadMode] = useState<'quick' | 'deep'>('quick')
+  // 缓存 key 区分快速/深度，避免共用同一份缓存
+  const reportFingerprint = useMemo(() => `${baseFingerprint}_${readMode}`, [baseFingerprint, readMode])
 
   const { balance, doConsume } = usePoints()
   const [showPointsModal, setShowPointsModal] = useState(false)
-  const [aiContent, setAiContent] = useState(() => getCachedAiReport(computeAiReportFingerprint(input)) ?? '')
+  const [aiContent, setAiContent] = useState(() => getCachedAiReport(`${computeAiReportFingerprint(input)}_quick`) ?? '')
   const [aiPhase, setAiPhase] = useState<'idle' | 'loading' | 'done' | 'error'>(() =>
-    getCachedAiReport(computeAiReportFingerprint(input)) ? 'done' : 'idle',
+    getCachedAiReport(`${computeAiReportFingerprint(input)}_quick`) ? 'done' : 'idle',
   )
   const [aiError, setAiError] = useState('')
   const [aiLoadGen, setAiLoadGen] = useState(0)
   const [activeTab, setActiveTab] = useState<TabKey>('greeting')
-  const [readMode, setReadMode] = useState<'quick' | 'deep'>('quick')
   const tabTopRef = useRef<HTMLDivElement>(null)
 
   const switchTab = (key: TabKey) => {
@@ -187,7 +189,7 @@ export default function Step3Report({
     }, 0)
   }
 
-  /** 换人/重新排盘后指纹变化 */
+  /** 指纹或模式切换时，检查对应缓存 */
   useEffect(() => {
     const cached = getCachedAiReport(reportFingerprint)
     if (cached) {
@@ -200,7 +202,6 @@ export default function Step3Report({
       setAiError('')
     }
     setActiveTab('greeting')
-    tabTopRef.current?.scrollIntoView({ behavior: 'auto', block: 'start' })
   }, [reportFingerprint])
 
   useEffect(() => {
@@ -243,7 +244,7 @@ export default function Step3Report({
     setAiError('')
     setAiContent('')
     try {
-      const prompt = buildReadingPrompt(input, results)
+      const prompt = buildReadingPrompt(input, results, readMode)
 const text = await fetchAIReading(prompt)
                 setAiContent(text)
                 setAiPhase('done')

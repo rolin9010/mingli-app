@@ -204,18 +204,20 @@ export default function HeBanReport({
   results: HeBanResults
   onAIReportComplete?: (aiReport: string) => void | Promise<void>
 }) {
-  const fingerprint = useMemo(() => computeHeBanFingerprint(input), [input])
+  const baseFingerprint = useMemo(() => computeHeBanFingerprint(input), [input])
+  const [readMode, setReadMode] = useState<'quick' | 'deep'>('quick')
+  // 缓存 key 区分快速/深度
+  const fingerprint = useMemo(() => `${baseFingerprint}_${readMode}`, [baseFingerprint, readMode])
 
   const { balance, doConsume } = usePoints()
   const [showPointsModal, setShowPointsModal] = useState(false)
-  const [aiContent, setAiContent] = useState(() => getCachedAiReport(fingerprint) ?? '')
+  const [aiContent, setAiContent] = useState(() => getCachedAiReport(`${computeHeBanFingerprint(input)}_quick`) ?? '')
   const [aiPhase, setAiPhase] = useState<'idle' | 'loading' | 'done' | 'error'>(() =>
-    getCachedAiReport(fingerprint) ? 'done' : 'idle',
+    getCachedAiReport(`${computeHeBanFingerprint(input)}_quick`) ? 'done' : 'idle',
   )
   const [aiError, setAiError] = useState('')
   const [aiLoadGen, setAiLoadGen] = useState(0)
   const [activeTab, setActiveTab] = useState<HeBanTabKey>('greeting')
-  const [readMode, setReadMode] = useState<'quick' | 'deep'>('quick')
   const tabTopRef = useRef<HTMLDivElement>(null)
 
   const switchTab = (key: HeBanTabKey) => {
@@ -238,6 +240,21 @@ export default function HeBanReport({
 
   const topics = useMemo(() => aiContent ? parseHeBanTopics(aiContent) : null, [aiContent])
 
+  // 模式切换时检查对应缓存
+  useEffect(() => {
+    const cached = getCachedAiReport(fingerprint)
+    if (cached) {
+      setAiContent(cached)
+      setAiPhase('done')
+      setAiError('')
+    } else {
+      setAiContent('')
+      setAiPhase('idle')
+      setAiError('')
+    }
+    setActiveTab('greeting')
+  }, [fingerprint])
+
   const startAiReading = async (opts?: { force?: boolean }) => {
     if (opts?.force) clearCachedAiReport(fingerprint)
     else {
@@ -249,7 +266,7 @@ export default function HeBanReport({
     setAiError('')
     setAiContent('')
     try {
-      const prompt = buildHeBanPrompt(input.personA, results.resultA, input.personB, results.resultB, input.relation)
+      const prompt = buildHeBanPrompt(input.personA, results.resultA, input.personB, results.resultB, input.relation, readMode)
       const text = await fetchHeBanAIReading(prompt)
       setAiContent(text)
       setAiPhase('done')
