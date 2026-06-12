@@ -77,15 +77,17 @@ function CoinIcon({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 
 // ─── 主弹窗 ──────────────────────────────────────────────────────────────────
 export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: PointsModalProps) {
-  const { balance, checkedInToday, loading, doCheckIn, doRecharge, records } = usePoints()
+  const { balance, checkedInToday, loading, doCheckIn, records } = usePoints()
   const [tab, setTab] = useState<TabKey>(defaultTab)
-  const [recharging, setRecharging] = useState<number | null>(null)
   const [checkingIn, setCheckingIn] = useState(false)
 
   // 邀请统计
   const [inviteStats, setInviteStats] = useState<{ count: number; totalPoints: number } | null>(null)
   const [inviteLink, setInviteLink] = useState<string>('')
   const [copied, setCopied] = useState(false)
+
+  // 购买 toast
+  const [buyToast, setBuyToast] = useState(false)
 
   // 打开时加载邀请数据
   useEffect(() => {
@@ -101,16 +103,15 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
 
   if (!open) return null
 
-  const handleRecharge = async (points: number) => {
-    setRecharging(points)
-    await doRecharge(points)
-    setRecharging(null)
-  }
-
   const handleCheckIn = async () => {
     setCheckingIn(true)
     await doCheckIn()
     setCheckingIn(false)
+  }
+
+  const handleBuyClick = () => {
+    setBuyToast(true)
+    setTimeout(() => setBuyToast(false), 3000)
   }
 
   const handleCopy = async () => {
@@ -286,17 +287,23 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
 
           {/* 购买 */}
           {tab === 'buy' && (
-            <div className="p-4">
+            <div className="p-4 space-y-3">
+              {/* Toast 提示 */}
+              <div className={`flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-medium transition-all duration-300 ${
+                buyToast
+                  ? 'border-amber-400/40 bg-amber-400/10 text-amber-200 opacity-100 translate-y-0'
+                  : 'border-transparent bg-transparent text-transparent opacity-0 -translate-y-1 pointer-events-none'
+              }`}>
+                <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+                购买链路建设中，请稍后再来～
+              </div>
               <div className="grid grid-cols-2 gap-2.5">
                 {RECHARGE_PACKS.map((pack) => (
                   <button
                     key={pack.points}
                     type="button"
-                    disabled={recharging !== null}
-                    onClick={() => void handleRecharge(pack.points)}
-                    className={`relative flex flex-col rounded-2xl border border-[#333] bg-[#1a1a1a] p-3 text-left transition-all hover:border-amber-400/30 hover:bg-[#1e1e1e] active:scale-[0.98] ${
-                      recharging === pack.points ? 'opacity-60 animate-pulse' : ''
-                    }`}
+                    onClick={handleBuyClick}
+                    className="relative flex flex-col rounded-2xl border border-[#333] bg-[#1a1a1a] p-3 text-left transition-all hover:border-amber-400/30 hover:bg-[#1e1e1e] active:scale-[0.98]"
                   >
                     <CoinIcon size="sm" />
                     <div className="mt-2 text-lg font-bold text-amber-300">{pack.price}</div>
