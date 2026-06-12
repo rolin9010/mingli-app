@@ -130,7 +130,9 @@ export function rechargePoints(state: PointsState, amount: number): PointsState 
 
 /** 积分消耗常量 */
 export const POINTS_COST = {
-  AI_READING: 3,       // AI 解读
-  HEBAN_READING: 5,    // 合盘解读
-  DAILY_TIP: 1,        // 每日贴士
+  AI_READING_QUICK: 3,   // AI 快速解读
+  AI_READING_DEEP: 9,    // AI 深度解读
+  HEBAN_READING_QUICK: 3, // 合盘快速解读
+  HEBAN_READING_DEEP: 9,  // 合盘深度解读
+  DAILY_TIP: 1,           // 每日贴士
 } as const

@@ -217,6 +217,7 @@ export default function HeBanReport({
   const [aiError, setAiError] = useState('')
   const [aiLoadGen, setAiLoadGen] = useState(0)
   const [activeTab, setActiveTab] = useState<HeBanTabKey>('greeting')
+  const [readMode, setReadMode] = useState<'quick' | 'deep'>('quick')
   const tabTopRef = useRef<HTMLDivElement>(null)
 
   const switchTab = (key: HeBanTabKey) => {
@@ -341,34 +342,59 @@ setActiveTab('greeting')
 
               {/* idle → 积分消耗按钮 */}
               {aiPhase === 'idle' ? (
-                <div className="flex flex-col items-center justify-center gap-4 py-12">
-                  <div className="flex items-center gap-2 text-sm text-slate-400">
-                    <PointsBadge onClick={() => setShowPointsModal(true)} />
-                  </div>
+                <div className="flex flex-col items-center justify-center gap-5 py-10">
+                  <PointsBadge onClick={() => setShowPointsModal(true)} />
+
+                  {/* 主按钮 */}
                   <button
                     type="button"
                     onClick={() => {
-                      const cost = POINTS_COST.HEBAN_READING
+                      const cost = readMode === 'quick' ? POINTS_COST.HEBAN_READING_QUICK : POINTS_COST.HEBAN_READING_DEEP
                       if (balance >= cost) {
-                        const ok = doConsume(cost, 'consume_heban', `合盘解读 - ${nameA}×${nameB}`)
+                        const label = readMode === 'quick' ? '快速解读' : '深度解读'
+                        const ok = doConsume(cost, 'consume_heban', `合盘${label} - ${nameA}×${nameB}`)
                         if (ok) void startAiReading()
                       } else {
                         setShowPointsModal(true)
                       }
                     }}
-                    className={`relative overflow-hidden rounded-xl border px-8 py-3 text-sm font-semibold transition-all ${
-                      balance >= POINTS_COST.HEBAN_READING
-                        ? 'border-amber-400/50 bg-amber-400/15 text-amber-100 shadow-[inset_0_1px_0_rgba(251,191,36,0.15),0_0_20px_rgba(251,191,36,0.1)] hover:bg-amber-400/25 active:scale-[0.98]'
-                        : 'border-rose-400/30 bg-rose-400/10 text-rose-200 hover:bg-rose-400/20'
-                    }`}
+                    className="w-64 rounded-full border border-amber-400/60 bg-gradient-to-b from-amber-300 to-amber-500 px-6 py-3.5 text-sm font-semibold text-stone-900 shadow-[0_0_24px_rgba(251,191,36,0.35)] transition-all hover:brightness-110 active:scale-[0.97]"
                   >
-                    <span className="flex items-center gap-2">
-                      <span>💎 {POINTS_COST.HEBAN_READING}</span>
-                      <span className="h-3 w-px bg-white/20" />
-                      <span>{balance >= POINTS_COST.HEBAN_READING ? '开启合盘解读' : '积分不足，去充值'}</span>
+                    <span className="flex items-center justify-center gap-2">
+                      <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2"><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                      <span>
+                        开启 AI {readMode === 'quick' ? '快速' : '深度'}解读（{readMode === 'quick' ? POINTS_COST.HEBAN_READING_QUICK : POINTS_COST.HEBAN_READING_DEEP}积分）
+                      </span>
                     </span>
                   </button>
-                  <p className="text-[11px] text-slate-500">消耗 {POINTS_COST.HEBAN_READING} 积分解锁完整 AI 合盘解读</p>
+
+                  {/* 快速 / 深度 切换 */}
+                  <div className="flex w-48 items-center rounded-full border border-white/10 bg-white/[0.05] p-1">
+                    <button
+                      type="button"
+                      onClick={() => setReadMode('quick')}
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-1.5 text-xs font-medium transition-all ${
+                        readMode === 'quick'
+                          ? 'bg-amber-400/25 text-amber-200 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth="2"><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
+                      快速
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setReadMode('deep')}
+                      className={`flex flex-1 items-center justify-center gap-1.5 rounded-full py-1.5 text-xs font-medium transition-all ${
+                        readMode === 'deep'
+                          ? 'bg-amber-400/25 text-amber-200 shadow-sm'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      <svg viewBox="0 0 24 24" fill="none" className="h-3.5 w-3.5" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="9" /><path d="M12 7v5l3 3" /></svg>
+                      深度
+                    </button>
+                  </div>
                 </div>
               ) : null}
 
@@ -376,7 +402,7 @@ setActiveTab('greeting')
               <PointsModal
                 open={showPointsModal}
                 onClose={() => setShowPointsModal(false)}
-                defaultTab={balance < POINTS_COST.HEBAN_READING ? 'buy' : 'checkin'}
+                defaultTab={balance < POINTS_COST.HEBAN_READING_QUICK ? 'buy' : 'checkin'}
               />
 
               {/* loading */}
