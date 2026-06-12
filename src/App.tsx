@@ -140,14 +140,6 @@ function TopNav({
                   <>
                     <div className="fixed inset-0 z-10" onClick={closeMenu} />
                     <div className="absolute right-0 top-full z-20 mt-2 w-44 overflow-hidden rounded-xl border border-white/10 bg-[#111] shadow-2xl">
-                      <div className="px-4 py-3 border-b border-white/8">
-                        <div className="text-xs text-slate-500">当前积分</div>
-                        <div className="mt-0.5 flex items-center gap-1.5">
-                          <svg className="h-4 w-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" fillOpacity="0.3"/></svg>
-                          <span className="text-sm font-bold tabular-nums text-amber-300">{balance}</span>
-                          <span className="text-xs text-slate-500">积分</span>
-                        </div>
-                      </div>
                       <div className="py-1.5">
                         <DropdownItem
                           icon={<svg className="h-4 w-4 text-amber-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" fillOpacity="0.2"/></svg>}
