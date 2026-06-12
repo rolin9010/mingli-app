@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import type React from 'react'
 import { usePoints } from '../lib/PointsContext'
 import { getInviteStats } from '../lib/points'
@@ -122,6 +123,18 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
   }
 
   return (
+    <>
+      {/* 悬浮 Toast：Portal 渲染到 body，完全脱离弹窗 DOM */}
+      {createPortal(
+        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 rounded-2xl border border-amber-400/40 bg-[#1a1200] px-4 py-2.5 text-xs font-medium text-amber-200 shadow-lg shadow-black/40 transition-all duration-300 ${
+          buyToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
+        }`}>
+          <svg className="h-3.5 w-3.5 shrink-0 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+          购买链路建设中，请稍后再来～
+        </div>,
+        document.body
+      )}
+
     <div className="fixed inset-0 z-[300] flex items-end justify-center sm:items-center p-0 sm:p-4">
       <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" onClick={onClose} />
 
@@ -287,16 +300,7 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
 
           {/* 购买 */}
           {tab === 'buy' && (
-            <div className="p-4 space-y-3">
-              {/* Toast 提示 */}
-              <div className={`flex items-center gap-2 rounded-xl border px-3.5 py-2.5 text-xs font-medium transition-all duration-300 ${
-                buyToast
-                  ? 'border-amber-400/40 bg-amber-400/10 text-amber-200 opacity-100 translate-y-0'
-                  : 'border-transparent bg-transparent text-transparent opacity-0 -translate-y-1 pointer-events-none'
-              }`}>
-                <svg className="h-3.5 w-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-                购买链路建设中，请稍后再来～
-              </div>
+            <div className="p-4">
               <div className="grid grid-cols-2 gap-2.5">
                 {RECHARGE_PACKS.map((pack) => (
                   <button
@@ -358,6 +362,7 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
         </div>
       </div>
     </div>
+    </>
   )
 }
 
