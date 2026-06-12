@@ -70,7 +70,7 @@ function TopNav({
   return (
     <>
       <nav className="fixed inset-x-0 top-0 z-[100] h-14 border-b border-white/[0.07] bg-black/80 backdrop-blur-md">
-        <div className="mx-auto flex h-full max-w-6xl items-center justify-between gap-4 px-4 sm:px-6">
+        <div className="mx-auto flex h-full max-w-6xl items-center justify-between gap-4 px-6 sm:px-10">
 
           {/* ── 左：Logo ── */}
           <button
@@ -86,13 +86,13 @@ function TopNav({
             </span>
           </button>
 
-          {/* ── 中：功能链接 ── */}
-          <div className="flex flex-1 items-center justify-center gap-1 sm:gap-2">
+          {/* ── 右：功能链接 + 用户区 ── */}
+          <div className="relative flex shrink-0 items-center gap-1">
             {/* 积分中心 */}
             <button
               type="button"
               onClick={() => setShowPointsModal(true)}
-              className="hidden sm:flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-slate-300 hover:text-amber-200 transition-colors"
+              className="hidden sm:flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-slate-300 hover:text-amber-200 transition-colors"
             >
               <svg className="h-4 w-4 text-amber-400/80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="3" fill="currentColor" fillOpacity="0.2"/></svg>
               <span className="text-xs">积分中心</span>
@@ -111,10 +111,6 @@ function TopNav({
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
               历史记录
             </button>
-          </div>
-
-          {/* ── 右：用户区 ── */}
-          <div className="relative flex shrink-0 items-center gap-2">
             {/* 移动端积分角标 */}
             <button
               type="button"
@@ -148,7 +144,7 @@ function TopNav({
                         <div className="text-xs text-slate-500">当前积分</div>
                         <div className="mt-0.5 flex items-center gap-1.5">
                           <svg className="h-4 w-4 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3" fill="currentColor" fillOpacity="0.3"/></svg>
-                          <span className="text-base font-bold tabular-nums text-amber-300">{balance}</span>
+                          <span className="text-sm font-bold tabular-nums text-amber-300">{balance}</span>
                           <span className="text-xs text-slate-500">积分</span>
                         </div>
                       </div>
@@ -217,7 +213,7 @@ function DropdownItem({
     <button
       type="button"
       onClick={onClick}
-      className={`flex w-full items-center gap-2.5 px-4 py-2.5 text-sm transition-colors hover:bg-white/[0.05] ${
+      className={`flex w-full items-center gap-2 px-3 py-2 text-xs transition-colors hover:bg-white/[0.05] ${
         danger ? 'text-rose-400' : 'text-slate-200'
       }`}
     >
