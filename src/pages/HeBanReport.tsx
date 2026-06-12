@@ -361,8 +361,9 @@ setActiveTab('greeting')
                       const cost = readMode === 'quick' ? POINTS_COST.HEBAN_READING_QUICK : POINTS_COST.HEBAN_READING_DEEP
                       if (balance >= cost) {
                         const label = readMode === 'quick' ? '快速解读' : '深度解读'
-                        const ok = doConsume(cost, 'consume_heban', `合盘${label} - ${nameA}×${nameB}`)
-                        if (ok) void startAiReading()
+                        void doConsume(cost, 'consume_heban', `合盘${label} - ${nameA}×${nameB}`).then((ok) => {
+                          if (ok) void startAiReading()
+                        })
                       } else {
                         setShowPointsModal(true)
                       }

@@ -310,8 +310,9 @@ const text = await fetchAIReading(prompt)
                       const cost = readMode === 'quick' ? POINTS_COST.AI_READING_QUICK : POINTS_COST.AI_READING_DEEP
                       if (balance >= cost) {
                         const label = readMode === 'quick' ? '快速解读' : '深度解读'
-                        const ok = doConsume(cost, 'consume_ai', `AI${label} - ${input.name}`)
-                        if (ok) void startAiReading()
+                        void doConsume(cost, 'consume_ai', `AI${label} - ${input.name}`).then((ok) => {
+                          if (ok) void startAiReading()
+                        })
                       } else {
                         setShowPointsModal(true)
                       }

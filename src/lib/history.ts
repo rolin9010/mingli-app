@@ -37,6 +37,7 @@ export async function saveReading(input: UserInput, aiReport: string) {
     .from('readings')
     .insert({
       user_id: user.id,
+      user_email: user.email ?? null,
       input_data: input,
       ai_report: aiReport,
       name: input.name || '未命名',
@@ -60,6 +61,7 @@ export async function saveHeBanReading(input: HeBanUserInput, aiReport: string) 
     .from('readings')
     .insert({
       user_id: user.id,
+      user_email: user.email ?? null,
       input_data: input as unknown as Record<string, unknown>,
       ai_report: aiReport,
       name: `${input.personA.name} × ${input.personB.name}`,

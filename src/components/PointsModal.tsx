@@ -75,17 +75,23 @@ function CoinIcon({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 
 // ─── 主弹窗 ──────────────────────────────────────────────────────────────────
 export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: PointsModalProps) {
-  const { balance, checkedInToday, doCheckIn, doRecharge, records } = usePoints()
+  const { balance, checkedInToday, loading, doCheckIn, doRecharge, records } = usePoints()
   const [tab, setTab] = useState<TabKey>(defaultTab)
   const [recharging, setRecharging] = useState<number | null>(null)
+  const [checkingIn, setCheckingIn] = useState(false)
 
   if (!open) return null
 
   const handleRecharge = async (points: number) => {
     setRecharging(points)
-    await new Promise((r) => setTimeout(r, 800))
-    doRecharge(points)
+    await doRecharge(points)
     setRecharging(null)
+  }
+
+  const handleCheckIn = async () => {
+    setCheckingIn(true)
+    await doCheckIn()
+    setCheckingIn(false)
   }
 
   return (
@@ -115,7 +121,11 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
           <div className="text-xs text-slate-400 mb-2">当前积分</div>
           <div className="flex items-center justify-center gap-2">
             <CoinIcon size="lg" />
-            <span className="text-5xl font-bold tabular-nums text-amber-300 tracking-tight">{balance}</span>
+            {loading ? (
+              <span className="text-5xl font-bold tabular-nums text-amber-300/40 tracking-tight animate-pulse">--</span>
+            ) : (
+              <span className="text-5xl font-bold tabular-nums text-amber-300 tracking-tight">{balance}</span>
+            )}
             <span className="text-sm text-slate-400 mt-3">积分</span>
           </div>
         </div>
@@ -159,15 +169,17 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                 </div>
                 <button
                   type="button"
-                  disabled={checkedInToday}
-                  onClick={() => doCheckIn()}
+                  disabled={checkedInToday || checkingIn}
+                  onClick={() => void handleCheckIn()}
                   className={`w-full rounded-xl py-3 text-xs font-semibold transition-all ${
                     checkedInToday
                       ? 'bg-emerald-600/25 border border-emerald-500/30 text-emerald-300'
-                      : 'bg-amber-400/15 border border-amber-400/30 text-amber-100 hover:bg-amber-400/25 active:scale-[0.98]'
+                      : checkingIn
+                        ? 'bg-amber-400/10 border border-amber-400/20 text-amber-300/60 animate-pulse'
+                        : 'bg-amber-400/15 border border-amber-400/30 text-amber-100 hover:bg-amber-400/25 active:scale-[0.98]'
                   }`}
                 >
-                  {checkedInToday ? '✓ 今日已签到' : '📅 立即签到'}
+                  {checkedInToday ? '✓ 今日已签到' : checkingIn ? '签到中…' : '📅 立即签到'}
                 </button>
               </div>
             </div>
