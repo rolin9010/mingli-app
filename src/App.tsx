@@ -70,7 +70,7 @@ function TopNav({
   return (
     <>
       <nav className="fixed inset-x-0 top-0 z-[100] h-14 border-b border-white/[0.07] bg-black/80 backdrop-blur-md">
-        <div className="mx-auto flex h-full max-w-5xl items-center justify-between gap-4 px-8 sm:px-12">
+        <div className="mx-auto flex h-full max-w-4xl items-center justify-between gap-4 px-8 sm:px-12">
 
           {/* ── 左：Logo ── */}
           <button
