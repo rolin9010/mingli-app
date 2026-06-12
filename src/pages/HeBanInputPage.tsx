@@ -439,9 +439,13 @@ function userInputToPersonState(input: UserInput): PersonState {
 export default function HeBanInputPage({
   onNext,
   isSubmitting = false,
+  mode = 'heban',
+  onSwitchMode,
 }: {
   onNext: (data: HeBanUserInput) => void | Promise<void>
   isSubmitting?: boolean
+  mode?: 'single' | 'heban'
+  onSwitchMode?: (m: 'single' | 'heban') => void
 }) {
   const today = new Date()
   const [personA, setPersonA] = useState<PersonState>(() => defaultPersonState(today, '男'))
@@ -478,11 +482,42 @@ export default function HeBanInputPage({
       {/* 标题区 — 与单人测算宽度和风格完全一致 */}
       <div className="mb-6 rounded-2xl border border-amber-400/20 bg-white/[0.03] px-4 py-5 sm:px-6">
         <p className="text-center font-serif text-2xl font-semibold tracking-wide text-amber-200/95 sm:text-3xl">
-          双人合盘测算
+          深度自我探索工具
         </p>
         <p className="mx-auto mt-2 px-1 text-center text-xs leading-relaxed text-slate-200/70">
           五行能量对照 · 娱乐参考，不构成任何建议
         </p>
+        {/* 单人 / 合盘切换 */}
+        {onSwitchMode && (
+          <div className="mt-4 flex items-center justify-center">
+            <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+              <button
+                type="button"
+                onClick={() => onSwitchMode('single')}
+                className={[
+                  'rounded-lg px-4 py-1.5 text-xs font-medium transition',
+                  mode === 'single'
+                    ? 'bg-amber-400/20 border border-amber-400/40 text-amber-100'
+                    : 'text-slate-400 hover:text-slate-200',
+                ].join(' ')}
+              >
+                ✦ 单人测算
+              </button>
+              <button
+                type="button"
+                onClick={() => onSwitchMode('heban')}
+                className={[
+                  'rounded-lg px-4 py-1.5 text-xs font-medium transition',
+                  mode === 'heban'
+                    ? 'bg-amber-400/20 border border-amber-400/40 text-amber-100'
+                    : 'text-slate-400 hover:text-slate-200',
+                ].join(' ')}
+              >
+                ☯ 合盘测算
+              </button>
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="grid gap-4">

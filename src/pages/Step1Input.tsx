@@ -457,11 +457,15 @@ export default function Step1Input({
   onNext,
   initialValues,
   isSubmitting = false,
+  mode = 'single',
+  onSwitchMode,
 }: {
   onNext: (data: UserInput) => void | Promise<void>
   initialValues?: UserInput | null
   /** 动态加载测算模块时禁用「下一步」避免重复提交 */
   isSubmitting?: boolean
+  mode?: 'single' | 'heban'
+  onSwitchMode?: (m: 'single' | 'heban') => void
 }) {
   const today = new Date()
   const [name, setName] = useState(() => initialValues?.name?.trim() ?? '')
@@ -713,6 +717,37 @@ export default function Step1Input({
           <p className="mx-auto mt-2 px-1 text-center text-xs leading-relaxed text-slate-200/70">
             五行能量分析 · 娱乐参考，不构成任何建议
           </p>
+          {/* 单人 / 合盘切换 */}
+          {onSwitchMode && (
+            <div className="mt-4 flex items-center justify-center">
+              <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-white/[0.04] p-1">
+                <button
+                  type="button"
+                  onClick={() => onSwitchMode('single')}
+                  className={[
+                    'rounded-lg px-4 py-1.5 text-xs font-medium transition',
+                    mode === 'single'
+                      ? 'bg-amber-400/20 border border-amber-400/40 text-amber-100'
+                      : 'text-slate-400 hover:text-slate-200',
+                  ].join(' ')}
+                >
+                  ✦ 单人测算
+                </button>
+                <button
+                  type="button"
+                  onClick={() => onSwitchMode('heban')}
+                  className={[
+                    'rounded-lg px-4 py-1.5 text-xs font-medium transition',
+                    mode === 'heban'
+                      ? 'bg-amber-400/20 border border-amber-400/40 text-amber-100'
+                      : 'text-slate-400 hover:text-slate-200',
+                  ].join(' ')}
+                >
+                  ☯ 合盘测算
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         <div className="grid gap-5">

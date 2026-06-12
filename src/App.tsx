@@ -52,16 +52,12 @@ function TopNav({
   onOpenAuth,
   onHistory,
   onHome,
-  mode,
-  onSwitchMode,
   showHistory,
 }: {
   user: User | null
   onOpenAuth: () => void
   onHistory: () => void
   onHome: () => void
-  mode: AppMode
-  onSwitchMode: (m: AppMode) => void
   showHistory: boolean
 }) {
   const { balance } = usePoints()
@@ -90,36 +86,8 @@ function TopNav({
             </span>
           </button>
 
-          {/* ── 中：模式切换 + 功能链接 ── */}
+          {/* ── 中：功能链接 ── */}
           <div className="flex flex-1 items-center justify-center gap-1 sm:gap-2">
-            {/* 模式切换 */}
-            <div className="flex items-center gap-0.5 rounded-xl border border-white/10 bg-white/[0.04] p-1">
-              <button
-                type="button"
-                onClick={() => { onSwitchMode('single'); if (showHistory) onHome() }}
-                className={[
-                  'rounded-lg px-3 py-1.5 text-xs font-medium transition',
-                  mode === 'single' && !showHistory
-                    ? 'bg-amber-400/20 border border-amber-400/40 text-amber-100'
-                    : 'text-slate-400 hover:text-slate-200',
-                ].join(' ')}
-              >
-                ✦ 单人
-              </button>
-              <button
-                type="button"
-                onClick={() => { onSwitchMode('heban'); if (showHistory) onHome() }}
-                className={[
-                  'rounded-lg px-3 py-1.5 text-xs font-medium transition',
-                  mode === 'heban' && !showHistory
-                    ? 'bg-amber-400/20 border border-amber-400/40 text-amber-100'
-                    : 'text-slate-400 hover:text-slate-200',
-                ].join(' ')}
-              >
-                ☯ 合盘
-              </button>
-            </div>
-
             {/* 积分中心 */}
             <button
               type="button"
@@ -320,8 +288,6 @@ function WizardApp({ user }: { user: User | null }) {
         onOpenAuth={() => setShowAuth(true)}
         onHistory={() => setShowHistory(true)}
         onHome={goHome}
-        mode={mode}
-        onSwitchMode={switchMode}
         showHistory={showHistory}
       />
       {showAuth ? <AuthModal onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} /> : null}
@@ -338,6 +304,8 @@ function WizardApp({ user }: { user: User | null }) {
                 {step === 1 && (
                   <Step1Input
                     key={step1Key}
+                    mode={mode}
+                    onSwitchMode={switchMode}
                     initialValues={step1Key > 0 ? input : null}
                     isSubmitting={isComputing}
                     onNext={async (data) => {
@@ -402,6 +370,8 @@ function WizardApp({ user }: { user: User | null }) {
               <>
                 {heBanStep === 1 && (
                   <HeBanInputPage
+                    mode={mode}
+                    onSwitchMode={switchMode}
                     isSubmitting={isHeBanComputing}
                     onNext={async (data) => {
                       if (isHeBanComputing) return
