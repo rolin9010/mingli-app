@@ -78,47 +78,60 @@ export function isAdminEmail(email: string | undefined): boolean {
 
 /** 获取用户列表（含积分余额和测算次数） */
 export async function adminGetUsers(): Promise<AdminUser[]> {
-  // 查积分表
-  const { data: pointsData } = await supabase
-    .from('user_points')
-    .select('user_id, balance')
+  // 从 admin_users_view 查所有用户（需要在 Supabase 建视图）
+  const [usersRes, pointsRes, readingsRes] = await Promise.all([
+    supabase
+      .from('admin_users_view')
+      .select('id, email, created_at')
+      .order('created_at', { ascending: false }),
+    supabase
+      .from('user_points')
+      .select('user_id, balance'),
+    supabase
+      .from('readings')
+      .select('user_id'),
+  ])
 
-  // 查测算记录数
+  // 统计每个用户的测算次数
+  const readingCountMap = new Map<string, number>()
+  for (const r of readingsRes.data ?? []) {
+    if (!r.user_id) continue
+    readingCountMap.set(r.user_id as string, (readingCountMap.get(r.user_id as string) ?? 0) + 1)
+  }
+
+  const pointsMap = new Map((pointsRes.data ?? []).map((p) => [p.user_id as string, p.balance as number]))
+
+  // 如果视图查询成功，直接用视图数据（最准确）
+  if (usersRes.data && usersRes.data.length > 0) {
+    return (usersRes.data as { id: string; email: string; created_at: string }[]).map((u) => ({
+      id: u.id,
+      email: u.email ?? '(未知)',
+      created_at: u.created_at,
+      balance: pointsMap.get(u.id) ?? 0,
+      readingCount: readingCountMap.get(u.id) ?? 0,
+    }))
+  }
+
+  // 兜底：从 readings 表里的 user_email 聚合（老方案）
   const { data: readingsData } = await supabase
     .from('readings')
     .select('user_id, user_email, created_at')
     .order('created_at', { ascending: false })
 
-  // 查 auth.users（通过 readings 表里存的 user_email 来获取用户信息）
-  // 先聚合出所有不重复的 user_id + email
   const userMap = new Map<string, { email: string; created_at: string; readingCount: number }>()
-
   for (const r of readingsData ?? []) {
     if (!r.user_id) continue
-    const existing = userMap.get(r.user_id)
+    const existing = userMap.get(r.user_id as string)
     if (!existing) {
-      userMap.set(r.user_id, {
-        email: r.user_email ?? '(未知)',
-        created_at: r.created_at,
+      userMap.set(r.user_id as string, {
+        email: (r.user_email as string) ?? '(未知)',
+        created_at: r.created_at as string,
         readingCount: 1,
       })
     } else {
       existing.readingCount++
     }
   }
-
-  // 也纳入有积分但无测算记录的用户（从 support_messages 补充）
-  const { data: msgData } = await supabase
-    .from('support_messages')
-    .select('user_id')
-
-  for (const m of msgData ?? []) {
-    if (m.user_id && m.user_id !== 'anonymous' && !userMap.has(m.user_id)) {
-      userMap.set(m.user_id, { email: '(无测算记录)', created_at: '', readingCount: 0 })
-    }
-  }
-
-  const pointsMap = new Map((pointsData ?? []).map((p) => [p.user_id, p.balance as number]))
 
   return Array.from(userMap.entries()).map(([id, info]) => ({
     id,
@@ -131,7 +144,7 @@ export async function adminGetUsers(): Promise<AdminUser[]> {
 
 /** 获取单个用户详情 */
 export async function adminGetUserDetail(userId: string): Promise<AdminUserDetail | null> {
-  const [pointsRes, recordsRes, readingsRes] = await Promise.all([
+  const [pointsRes, recordsRes, readingsRes, userRes] = await Promise.all([
     supabase.from('user_points').select('user_id, balance').eq('user_id', userId).single(),
     supabase
       .from('points_records')
@@ -144,14 +157,28 @@ export async function adminGetUserDetail(userId: string): Promise<AdminUserDetai
       .select('id, name, birth_date, created_at, input_data, ai_report, user_email')
       .eq('user_id', userId)
       .order('created_at', { ascending: false }),
+    // 从视图读邮箱（最准确，覆盖老数据）
+    supabase
+      .from('admin_users_view')
+      .select('email, created_at')
+      .eq('id', userId)
+      .single(),
   ])
 
-  const email = (readingsRes.data?.[0] as { user_email?: string } | undefined)?.user_email ?? '(未知)'
+  // 优先用视图里的邮箱，其次读 readings 里的 user_email
+  const email =
+    (userRes.data as { email?: string } | null)?.email ??
+    (readingsRes.data?.[0] as { user_email?: string } | undefined)?.user_email ??
+    '(未知)'
+
+  const createdAt =
+    (userRes.data as { created_at?: string } | null)?.created_at ??
+    readingsRes.data?.[0]?.created_at ?? ''
 
   return {
     id: userId,
     email,
-    created_at: readingsRes.data?.[0]?.created_at ?? '',
+    created_at: createdAt,
     balance: (pointsRes.data?.balance as number) ?? 0,
     readingCount: readingsRes.data?.length ?? 0,
     records: (recordsRes.data ?? []) as AdminPointsRecord[],
