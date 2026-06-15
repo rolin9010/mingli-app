@@ -196,3 +196,12 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 管理员已读标记字段（在 Supabase SQL Editor 执行）
+-- 管理员打开某个 session 时批量更新该 session 所有消息的 admin_read_at
+-- ════════════════════════════════════════════════════════════════════════════
+
+-- 给 support_messages 表加已读时间字段（若已存在会报错，可忽略）
+alter table support_messages
+  add column if not exists admin_read_at timestamptz;

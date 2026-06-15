@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { adminGetSessions, adminReplyMessage, type AdminSession, type AdminMessage, type AdminSessionUserSnap } from '../../lib/admin'
+import { adminGetSessions, adminMarkSessionRead, adminReplyMessage, type AdminSession, type AdminMessage, type AdminSessionUserSnap } from '../../lib/admin'
 import UserDetailPanel from './UserDetailPanel'
 
 function formatTime(iso: string) {
@@ -144,15 +144,8 @@ export default function MessagesPage() {
   const [replyDrafts, setReplyDrafts] = useState<Map<string, string>>(new Map())
   const [replying, setReplying] = useState(false)
   const [replyingMsgId, setReplyingMsgId] = useState<string | null>(null)
-  // 已读会话持久化到 localStorage
-  const [readSessions, setReadSessions] = useState<Set<string>>(() => {
-    try {
-      const saved = localStorage.getItem('admin_read_sessions')
-      return saved ? new Set<string>(JSON.parse(saved) as string[]) : new Set<string>()
-    } catch {
-      return new Set<string>()
-    }
-  })
+  // 本次会话内已标记过已读的 session（避免重复调用接口）
+  const [readSessions, setReadSessions] = useState<Set<string>>(new Set())
   // 跳转到用户详情
   const [viewingUserId, setViewingUserId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
@@ -166,16 +159,13 @@ export default function MessagesPage() {
 
   useEffect(() => { void load() }, [])
 
-  // 页面加载后自动把已选中的会话标为已读
+  // 页面加载完成后，自动标记默认选中的第一个会话为已读
   useEffect(() => {
-    if (selectedId) {
-      setReadSessions((prev) => {
-        if (prev.has(selectedId)) return prev
-        const next = new Set([...prev, selectedId])
-        try { localStorage.setItem('admin_read_sessions', JSON.stringify([...next])) } catch {}
-        return next
-      })
+    if (selectedId && !readSessions.has(selectedId)) {
+      setReadSessions((prev) => new Set([...prev, selectedId]))
+      void adminMarkSessionRead(selectedId)
     }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId])
 
   useEffect(() => {
@@ -184,11 +174,11 @@ export default function MessagesPage() {
 
   const handleSelectSession = (sid: string) => {
     setSelectedId(sid)
-    setReadSessions((prev) => {
-      const next = new Set([...prev, sid])
-      try { localStorage.setItem('admin_read_sessions', JSON.stringify([...next])) } catch {}
-      return next
-    })
+    // 标记该 session 为已读（写入数据库）
+    if (!readSessions.has(sid)) {
+      setReadSessions((prev) => new Set([...prev, sid]))
+      void adminMarkSessionRead(sid)
+    }
   }
 
   const selected = sessions.find((s) => s.session_id === selectedId)

@@ -67,6 +67,7 @@ export interface AdminMessage {
   replied_at: string | null
   created_at: string
   context_info: string | null
+  admin_read_at: string | null
 }
 
 export interface AdminStats {
@@ -242,7 +243,7 @@ export async function adminAdjustPoints(
 export async function adminGetSessions(): Promise<AdminSession[]> {
   const { data, error } = await supabase
     .from('support_messages')
-    .select('id, session_id, user_id, content, reply, replied_at, created_at, context_info')
+    .select('id, session_id, user_id, content, reply, replied_at, created_at, context_info, admin_read_at')
     .order('created_at', { ascending: true })
 
   if (error || !data) return []
@@ -265,6 +266,7 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
       replied_at: row.replied_at as string | null,
       created_at: row.created_at as string,
       context_info: row.context_info as string | null,
+      admin_read_at: row.admin_read_at as string | null,
     })
   }
 
@@ -402,7 +404,8 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
   return Array.from(sessionMap.entries()).map(([sid, s]) => {
     const msgs = s.messages
     const last = msgs[msgs.length - 1]
-    const unread = msgs.filter((m) => !m.reply).length
+    // 有任何一条消息未被管理员读取过，则算未读
+    const unread = msgs.filter((m) => !m.admin_read_at).length
     const reading = latestReadingMap.get(s.user_id)
     const userSnap: AdminSessionUserSnap | null = reading ? {
       name: (reading.name as string | undefined) ?? null,
@@ -425,14 +428,23 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
   }).sort((a, b) => new Date(b.last_time).getTime() - new Date(a.last_time).getTime())
 }
 
-/** 回复某条消息 */
+/** 标记某个 session 下所有消息为管理员已读 */
+export async function adminMarkSessionRead(sessionId: string): Promise<void> {
+  await supabase
+    .from('support_messages')
+    .update({ admin_read_at: new Date().toISOString() })
+    .eq('session_id', sessionId)
+    .is('admin_read_at', null)  // 只更新还没标记过的，减少写操作
+}
+
+/** 回复某条消息（同时顺带标记该条消息已读） */
 export async function adminReplyMessage(
   messageId: string,
   reply: string,
 ): Promise<{ success: boolean }> {
   const { error } = await supabase
     .from('support_messages')
-    .update({ reply, replied_at: new Date().toISOString() })
+    .update({ reply, replied_at: new Date().toISOString(), admin_read_at: new Date().toISOString() })
     .eq('id', messageId)
 
   return { success: !error }
