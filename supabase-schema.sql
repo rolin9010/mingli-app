@@ -50,6 +50,10 @@ create policy "管理员可读所有消息"
   on support_messages for select
   using (auth.email() = any(string_to_array(current_setting('app.admin_emails', true), ',')));
 
+create policy "管理员可插入消息"
+  on support_messages for insert
+  with check (auth.email() = any(string_to_array(current_setting('app.admin_emails', true), ',')));
+
 create policy "管理员可更新回复"
   on support_messages for update
   using (auth.email() = any(string_to_array(current_setting('app.admin_emails', true), ',')));
