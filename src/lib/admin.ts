@@ -451,6 +451,7 @@ export async function adminReplyMessage(
     .update({ reply, replied_at: new Date().toISOString(), admin_read_at: new Date().toISOString() })
     .eq('id', messageId)
 
+  if (error) console.error('[adminReplyMessage] error:', error)
   return { success: !error }
 }
 
@@ -465,7 +466,8 @@ export async function adminSendProactiveMessage(
   text: string,
 ): Promise<{ success: boolean }> {
   const now = new Date().toISOString()
-  const { error } = await supabase
+  console.log('[adminSendProactiveMessage] inserting for userId:', userId, 'sessionId:', sessionId)
+  const { error, data } = await supabase
     .from('support_messages')
     .insert({
       session_id: sessionId,
@@ -475,6 +477,8 @@ export async function adminSendProactiveMessage(
       replied_at: now,
       admin_read_at: now,
     })
+    .select()
+  console.log('[adminSendProactiveMessage] result:', { error, data })
 
   return { success: !error }
 }

@@ -202,15 +202,20 @@ export default function MessagesPage() {
     const target = getReplyTarget()
     let success = false
 
+    console.log('[handleReply] target:', target, 'user_id:', selected.user_id, 'messages count:', selected.messages.length)
+
     if (target) {
       // 有未回复的用户消息：给该消息写 reply
+      console.log('[handleReply] → adminReplyMessage, msgId:', target.id)
       ;({ success } = await adminReplyMessage(target.id, text))
     } else {
       // 没有未回复的消息（全部已回复，或管理员主动发起）：插入新记录
       const lastMsg = selected.messages[selected.messages.length - 1]
       const sessionId = lastMsg?.session_id ?? selected.session_id
+      console.log('[handleReply] → adminSendProactiveMessage, sessionId:', sessionId)
       ;({ success } = await adminSendProactiveMessage(selected.user_id, sessionId, text))
     }
+    console.log('[handleReply] success:', success)
 
     if (success) {
       setReplyDraft('')
