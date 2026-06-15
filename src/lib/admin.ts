@@ -37,6 +37,17 @@ export interface AdminReading {
   ai_report: string | null
 }
 
+export interface AdminSessionUserSnap {
+  name: string | null
+  birth_date: string | null
+  /** { element: '木'|'火'|'土'|'金'|'水', percent: number }[] */
+  elements: { element: string; percent: number }[] | null
+  /** 四柱，如 ["甲子","乙丑","丙寅","丁卯"] */
+  pillars: string[] | null
+  balance: number
+  readingCount: number
+}
+
 export interface AdminSession {
   session_id: string
   user_id: string
@@ -45,6 +56,8 @@ export interface AdminSession {
   last_time: string
   unread_count: number
   messages: AdminMessage[]
+  /** 用户最近一次测算的快照摘要（可能为 null） */
+  userSnap: AdminSessionUserSnap | null
 }
 
 export interface AdminMessage {
@@ -225,7 +238,7 @@ export async function adminAdjustPoints(
 
 // ─── 消息管理 ─────────────────────────────────────────────────────────────────
 
-/** 获取所有会话列表 */
+/** 获取所有会话列表（含用户摘要快照） */
 export async function adminGetSessions(): Promise<AdminSession[]> {
   const { data, error } = await supabase
     .from('support_messages')
@@ -255,16 +268,134 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
     })
   }
 
-  // 查每个 user_id 对应的邮箱（从 readings 表）
-  const allUserIds = Array.from(new Set(Array.from(sessionMap.values()).map((s) => s.user_id).filter(Boolean)))
+  const allUserIds = Array.from(new Set(
+    Array.from(sessionMap.values()).map((s) => s.user_id).filter(Boolean)
+  ))
+
+  // 并行查：邮箱、积分、最近一条测算
+  const [emailViewRes, readingsRes, pointsRes] = await Promise.all([
+    allUserIds.length > 0
+      ? supabase.from('admin_users_view').select('id, email').in('id', allUserIds)
+      : Promise.resolve({ data: [] }),
+    allUserIds.length > 0
+      ? supabase
+          .from('readings')
+          .select('user_id, user_email, name, birth_date, input_data')
+          .in('user_id', allUserIds)
+          .order('created_at', { ascending: false })
+      : Promise.resolve({ data: [] }),
+    allUserIds.length > 0
+      ? supabase.from('user_points').select('user_id, balance').in('user_id', allUserIds)
+      : Promise.resolve({ data: [] }),
+  ])
+
   const emailMap = new Map<string, string>()
-  if (allUserIds.length > 0) {
-    const { data: emailData } = await supabase
-      .from('readings')
-      .select('user_id, user_email')
-      .in('user_id', allUserIds)
-    for (const r of emailData ?? []) {
-      if (r.user_id && r.user_email) emailMap.set(r.user_id as string, r.user_email as string)
+  for (const r of (emailViewRes.data ?? []) as { id: string; email: string }[]) {
+    if (r.id && r.email) emailMap.set(r.id, r.email)
+  }
+  // 兜底：从 readings 里补充邮箱
+  for (const r of (readingsRes.data ?? []) as { user_id: string; user_email?: string }[]) {
+    if (r.user_id && r.user_email && !emailMap.has(r.user_id)) {
+      emailMap.set(r.user_id, r.user_email)
+    }
+  }
+
+  const pointsMap = new Map<string, number>()
+  for (const p of (pointsRes.data ?? []) as { user_id: string; balance: number }[]) {
+    pointsMap.set(p.user_id, p.balance)
+  }
+
+  // 每个 user_id 的最新一条测算（readings 已按 created_at desc，第一次出现即最新）
+  type ReadingRow = {
+    user_id: string
+    user_email?: string
+    name?: string
+    birth_date?: string
+    input_data?: unknown
+  }
+  const latestReadingMap = new Map<string, ReadingRow>()
+  const readingCountMap = new Map<string, number>()
+  for (const r of (readingsRes.data ?? []) as ReadingRow[]) {
+    if (!r.user_id) continue
+    readingCountMap.set(r.user_id, (readingCountMap.get(r.user_id) ?? 0) + 1)
+    if (!latestReadingMap.has(r.user_id)) latestReadingMap.set(r.user_id, r)
+  }
+
+  /** 从 input_data 里用纯 JS 计算五行占比（不依赖 bazi.ts，避免循环依赖） */
+  function extractElements(inputData: unknown): { element: string; percent: number }[] | null {
+    try {
+      if (!inputData || typeof inputData !== 'object') return null
+      const data = inputData as Record<string, unknown>
+      // 单人：{ birth: { year, month, day, hour } }
+      // 合盘：{ personA: { birth: ... }, personB: { birth: ... } }
+      const birth = (data.birth as Record<string, number> | undefined) ??
+        ((data.personA as Record<string, unknown> | undefined)?.birth as Record<string, number> | undefined)
+      if (!birth?.year) return null
+
+      // 天干五行映射
+      const stemEl: Record<string, string> = {
+        甲:'木',乙:'木',丙:'火',丁:'火',戊:'土',己:'土',庚:'金',辛:'金',壬:'水',癸:'水'
+      }
+      // 地支藏干
+      const branchHidden: Record<string, {stem:string;weight:number}[]> = {
+        子:[{stem:'癸',weight:10}],
+        丑:[{stem:'己',weight:6},{stem:'癸',weight:3},{stem:'辛',weight:1}],
+        寅:[{stem:'甲',weight:7},{stem:'丙',weight:2},{stem:'戊',weight:1}],
+        卯:[{stem:'乙',weight:10}],
+        辰:[{stem:'戊',weight:6},{stem:'乙',weight:3},{stem:'癸',weight:1}],
+        巳:[{stem:'丙',weight:7},{stem:'庚',weight:2},{stem:'戊',weight:1}],
+        午:[{stem:'丁',weight:7},{stem:'己',weight:3}],
+        未:[{stem:'己',weight:6},{stem:'丁',weight:3},{stem:'乙',weight:1}],
+        申:[{stem:'庚',weight:7},{stem:'壬',weight:2},{stem:'戊',weight:1}],
+        酉:[{stem:'辛',weight:10}],
+        戌:[{stem:'戊',weight:6},{stem:'辛',weight:3},{stem:'丁',weight:1}],
+        亥:[{stem:'壬',weight:7},{stem:'甲',weight:3}],
+      }
+      const tianGan = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']
+      const diZhi = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']
+      // 简化版：用年份推算年柱（仅粗估，不做节气修正）
+      const y = Number(birth.year)
+      const m = Number(birth.month ?? 1)
+      const d = Number(birth.day ?? 1)
+      const h = Number(birth.hour ?? 0)
+      const yearStem = tianGan[(y - 4) % 10]
+      const yearBranch = diZhi[(y - 4) % 12]
+      // 月支（粗估，不做节气）：月 1-12 对应 寅卯辰巳午未申酉戌亥子丑
+      const monthBranchIdx = ((m - 1) + 2) % 12
+      const monthBranch = diZhi[monthBranchIdx]
+      const monthStemBase = (((y - 4) % 5) * 2) % 10
+      const monthStem = tianGan[(monthStemBase + (m - 1)) % 10]
+      // 日柱：用简化儒略日
+      const julianDay = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d - 1524
+      const dayStemIdx = (julianDay + 9) % 10
+      const dayBranchIdx = (julianDay + 11) % 12
+      const dayStem = tianGan[dayStemIdx]
+      const dayBranch = diZhi[dayBranchIdx]
+      // 时柱
+      const hourBranchIdx = Math.floor((h + 1) / 2) % 12
+      const hourStemBase = (dayStemIdx % 5) * 2
+      const hourStem = tianGan[(hourStemBase + hourBranchIdx) % 10]
+      const hourBranch = diZhi[hourBranchIdx]
+
+      const counts: Record<string, number> = { 木:0, 火:0, 土:0, 金:0, 水:0 }
+      const addStem = (s?: string) => { if (s && stemEl[s]) counts[stemEl[s]] += 5 }
+      const addBranch = (b?: string) => {
+        if (!b) return
+        for (const {stem, weight} of branchHidden[b] ?? []) {
+          if (stemEl[stem]) counts[stemEl[stem]] += weight
+        }
+      }
+      addStem(yearStem); addBranch(yearBranch)
+      addStem(monthStem); addBranch(monthBranch)
+      addStem(dayStem); addBranch(dayBranch)
+      addStem(hourStem); addBranch(hourBranch)
+      const total = Math.max(1, Object.values(counts).reduce((a,b) => a+b, 0))
+      return (['木','火','土','金','水'] as const).map(el => ({
+        element: el,
+        percent: Math.round(counts[el] / total * 1000) / 10,
+      }))
+    } catch {
+      return null
     }
   }
 
@@ -272,6 +403,15 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
     const msgs = s.messages
     const last = msgs[msgs.length - 1]
     const unread = msgs.filter((m) => !m.reply).length
+    const reading = latestReadingMap.get(s.user_id)
+    const userSnap: AdminSessionUserSnap | null = reading ? {
+      name: (reading.name as string | undefined) ?? null,
+      birth_date: (reading.birth_date as string | undefined) ?? null,
+      elements: extractElements(reading.input_data),
+      pillars: null, // 前端计算太重，留 null
+      balance: pointsMap.get(s.user_id) ?? 0,
+      readingCount: readingCountMap.get(s.user_id) ?? 0,
+    } : null
     return {
       session_id: sid,
       user_id: s.user_id,
@@ -280,6 +420,7 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
       last_time: last.created_at,
       unread_count: unread,
       messages: msgs,
+      userSnap,
     }
   }).sort((a, b) => new Date(b.last_time).getTime() - new Date(a.last_time).getTime())
 }
