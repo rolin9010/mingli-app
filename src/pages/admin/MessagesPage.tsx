@@ -27,12 +27,10 @@ const EL_COLOR: Record<string, { bar: string; text: string; bg: string }> = {
 function UserSnapPanel({
   snap,
   email,
-  userId,
   onViewDetail,
 }: {
   snap: AdminSessionUserSnap | null
   email: string
-  userId: string
   onViewDetail: () => void
 }) {
   return (
@@ -350,7 +348,6 @@ export default function MessagesPage() {
         <UserSnapPanel
           snap={selected.userSnap}
           email={selected.user_email}
-          userId={selected.user_id}
           onViewDetail={() => selected.user_id && setViewingUserId(selected.user_id)}
         />
       )}
