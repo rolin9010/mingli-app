@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { adminGetSessions, adminMarkSessionRead, adminReplyMessage, type AdminSession, type AdminMessage, type AdminSessionUserSnap } from '../../lib/admin'
+import { adminGetSessions, adminMarkSessionRead, adminReplyMessage, type AdminSession, type AdminSessionUserSnap } from '../../lib/admin'
 import UserDetailPanel from './UserDetailPanel'
 
 function formatTime(iso: string) {
@@ -141,9 +141,11 @@ export default function MessagesPage() {
   const [sessions, setSessions] = useState<AdminSession[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [replyDrafts, setReplyDrafts] = useState<Map<string, string>>(new Map())
+  const [replyDraft, setReplyDraft] = useState('')
   const [replying, setReplying] = useState(false)
-  const [replyingMsgId, setReplyingMsgId] = useState<string | null>(null)
+  // 当前选中要回复的消息 id（null = 回复最新一条未回复消息）
+  const [replyTargetId, setReplyTargetId] = useState<string | null>(null)
+  const replyInputRef = useRef<HTMLTextAreaElement>(null)
   // 本次会话内已标记过已读的 session（避免重复调用接口）
   const [readSessions, setReadSessions] = useState<Set<string>>(new Set())
   // 跳转到用户详情
@@ -183,26 +185,27 @@ export default function MessagesPage() {
 
   const selected = sessions.find((s) => s.session_id === selectedId)
 
-  const setDraft = (msgId: string, text: string) => {
-    setReplyDrafts((prev) => {
-      const next = new Map(prev)
-      next.set(msgId, text)
-      return next
-    })
+  // 取当前选中要回复的消息对象
+  const getReplyTarget = () => {
+    if (!selected) return null
+    if (replyTargetId) return selected.messages.find((m) => m.id === replyTargetId) ?? null
+    // 默认回复最新一条未回复的消息
+    const unreplied = selected.messages.filter((m) => !m.reply)
+    return unreplied[unreplied.length - 1] ?? null
   }
 
-  const handleReply = async (msg: AdminMessage) => {
-    const text = (replyDrafts.get(msg.id) ?? '').trim()
-    if (!text || replying) return
+  const handleReply = async () => {
+    const text = replyDraft.trim()
+    const target = getReplyTarget()
+    if (!text || replying || !target) return
     setReplying(true)
-    setReplyingMsgId(msg.id)
-    const { success } = await adminReplyMessage(msg.id, text)
+    const { success } = await adminReplyMessage(target.id, text)
     if (success) {
-      setReplyDrafts((prev) => { const next = new Map(prev); next.delete(msg.id); return next })
+      setReplyDraft('')
+      setReplyTargetId(null)
       await load()
     }
     setReplying(false)
-    setReplyingMsgId(null)
   }
 
   // 如果在查看用户详情，渲染详情面板
@@ -300,80 +303,119 @@ export default function MessagesPage() {
             </div>
 
             {/* 消息流 */}
-            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
+            <div className="flex-1 overflow-y-auto px-5 py-4 space-y-4">
               {selected.messages.map((msg, idx) => {
-                // 当前消息的 session_id 与上一条不同时，插入会话分隔线
                 const prevMsg = selected.messages[idx - 1]
                 const isNewSession = idx > 0 && prevMsg.session_id !== msg.session_id
+                const isReplyTarget = replyTargetId === msg.id
                 return (
-                <div key={msg.id} className="space-y-1.5">
-                  {/* 会话分隔线 */}
-                  {isNewSession && (
-                    <div className="flex items-center gap-2 py-1">
-                      <div className="flex-1 border-t border-white/[0.07]" />
-                      <span className="shrink-0 text-[10px] text-slate-600">新会话 · {formatTime(msg.created_at)}</span>
-                      <div className="flex-1 border-t border-white/[0.07]" />
-                    </div>
-                  )}
-                  {/* context_info 标签居左（跟随用户消息） */}
-                  {msg.context_info && (
-                    <div className="text-[10px] text-slate-600 text-left pl-1">📋 {msg.context_info}</div>
-                  )}
-
-                  {/* 用户消息 → 左侧（对方） */}
-                  <div className="flex items-end gap-2">
-                    <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400/15 text-xs">👤</div>
-                    <div className="max-w-[75%]">
-                      <div className="rounded-2xl rounded-tl-sm bg-white/[0.08] px-4 py-2.5 text-sm text-slate-100 whitespace-pre-wrap">
-                        {msg.content}
+                  <div key={msg.id}>
+                    {/* 会话分隔线 */}
+                    {isNewSession && (
+                      <div className="flex items-center gap-2 py-2 mb-2">
+                        <div className="flex-1 border-t border-white/[0.07]" />
+                        <span className="shrink-0 text-[10px] text-slate-600">新会话 · {formatTime(msg.created_at)}</span>
+                        <div className="flex-1 border-t border-white/[0.07]" />
                       </div>
-                      <div className="mt-0.5 text-[10px] text-slate-600 pl-1">{formatTime(msg.created_at)}</div>
+                    )}
+
+                    {/* context_info */}
+                    {msg.context_info && (
+                      <div className="text-[10px] text-slate-600 pl-9 mb-1">📋 {msg.context_info}</div>
+                    )}
+
+                    {/* 用户消息 → 左侧 */}
+                    <div className={`flex items-end gap-2 group ${isReplyTarget ? 'ring-1 ring-amber-400/30 rounded-2xl p-1 -m-1' : ''}`}>
+                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400/15 text-xs">👤</div>
+                      <div className="max-w-[72%]">
+                        <div className="rounded-2xl rounded-tl-sm bg-white/[0.08] px-4 py-2.5 text-sm text-slate-100 whitespace-pre-wrap">
+                          {msg.content}
+                        </div>
+                        <div className="mt-0.5 flex items-center gap-2 pl-1">
+                          <span className="text-[10px] text-slate-600">{formatTime(msg.created_at)}</span>
+                          {/* 未回复时显示"回复"按钮 */}
+                          {!msg.reply && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setReplyTargetId(msg.id)
+                                replyInputRef.current?.focus()
+                              }}
+                              className={`text-[10px] px-1.5 py-0.5 rounded transition-colors ${
+                                isReplyTarget
+                                  ? 'text-amber-300 bg-amber-400/15'
+                                  : 'text-slate-600 hover:text-amber-300 opacity-0 group-hover:opacity-100'
+                              }`}
+                            >
+                              回复此条
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     </div>
+
+                    {/* 管理员回复 → 右侧 */}
+                    {msg.reply && (
+                      <div className="flex items-end justify-end gap-2 mt-2">
+                        <div className="max-w-[72%]">
+                          <div className="rounded-2xl rounded-tr-sm bg-amber-500/25 px-4 py-2.5 text-sm text-amber-50 whitespace-pre-wrap">
+                            {msg.reply}
+                          </div>
+                          <div className="mt-0.5 text-right text-[10px] text-slate-600 pr-1">
+                            {msg.replied_at ? formatTime(msg.replied_at) : ''} · 客服
+                          </div>
+                        </div>
+                        <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-xs">🔮</div>
+                      </div>
+                    )}
                   </div>
-
-                  {/* 管理员回复 → 右侧（自己） */}
-                  {msg.reply ? (
-                    <div className="flex items-end justify-end gap-2">
-                      <div className="max-w-[75%]">
-                        <div className="rounded-2xl rounded-tr-sm bg-amber-500/25 px-4 py-2.5 text-sm text-amber-50 whitespace-pre-wrap">
-                          {msg.reply}
-                        </div>
-                        <div className="mt-0.5 text-right text-[10px] text-slate-600 pr-1">
-                          {msg.replied_at ? formatTime(msg.replied_at) : ''} · 客服
-                        </div>
-                      </div>
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-xs">🔮</div>
-                    </div>
-                  ) : (
-                    /* 未回复：内联回复框 */
-                    <div className="flex items-end justify-end gap-2 mt-1">
-                      <div className="flex flex-1 max-w-[80%] items-end gap-2">
-                        <textarea
-                          value={replyDrafts.get(msg.id) ?? ''}
-                          onChange={(e) => setDraft(msg.id, e.target.value)}
-                          placeholder="回复用户…（Enter 发送，Shift+Enter 换行）"
-                          rows={2}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleReply(msg) }
-                          }}
-                          className="flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:border-amber-400/40 focus:outline-none"
-                        />
-                        <button
-                          type="button"
-                          disabled={replying || !(replyDrafts.get(msg.id) ?? '').trim()}
-                          onClick={() => void handleReply(msg)}
-                          className="shrink-0 rounded-xl bg-amber-500/70 px-3 py-2 text-xs font-medium text-white hover:bg-amber-400 disabled:opacity-40 transition-colors"
-                        >
-                          {replying && replyingMsgId === msg.id ? '发送中…' : '回复'}
-                        </button>
-                      </div>
-                      <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-500/20 text-xs opacity-40">🔮</div>
-                    </div>
-                  )}
-                </div>
-              )})}
+                )
+              })}
               <div ref={bottomRef} />
             </div>
+
+            {/* 底部固定回复输入框 */}
+            {(() => {
+              const target = getReplyTarget()
+              const hasUnreplied = selected.messages.some((m) => !m.reply)
+              if (!hasUnreplied) return (
+                <div className="border-t border-white/[0.07] px-5 py-3 text-center text-xs text-slate-600">
+                  所有消息已回复 ✓
+                </div>
+              )
+              return (
+                <div className="border-t border-white/[0.07] px-5 py-3 space-y-2">
+                  {/* 回复目标提示 */}
+                  {replyTargetId && target && (
+                    <div className="flex items-center justify-between text-[10px] text-slate-500">
+                      <span>↩ 回复：<span className="text-amber-300/80 truncate max-w-[20rem] inline-block align-bottom">{target.content}</span></span>
+                      <button type="button" onClick={() => setReplyTargetId(null)} className="ml-2 text-slate-600 hover:text-slate-400">✕ 取消</button>
+                    </div>
+                  )}
+                  <div className="flex items-end gap-2">
+                    <textarea
+                      ref={replyInputRef}
+                      value={replyDraft}
+                      onChange={(e) => setReplyDraft(e.target.value)}
+                      placeholder={target ? `回复：${target.content.slice(0, 20)}${target.content.length > 20 ? '…' : ''}` : '回复用户…'}
+                      rows={2}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleReply() }
+                      }}
+                      className="flex-1 resize-none rounded-xl border border-white/10 bg-white/[0.05] px-3 py-2 text-xs text-slate-100 placeholder:text-slate-600 focus:border-amber-400/40 focus:outline-none"
+                    />
+                    <button
+                      type="button"
+                      disabled={replying || !replyDraft.trim()}
+                      onClick={() => void handleReply()}
+                      className="shrink-0 rounded-xl bg-amber-500/70 px-4 py-2 text-xs font-medium text-white hover:bg-amber-400 disabled:opacity-40 transition-colors"
+                    >
+                      {replying ? '发送中…' : '发送'}
+                    </button>
+                  </div>
+                </div>
+              )
+            })()}
           </>
         ) : (
           <div className="flex flex-1 items-center justify-center text-sm text-slate-600">
