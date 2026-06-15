@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { adminGetSessions, adminMarkSessionRead, adminReplyMessage, type AdminSession, type AdminSessionUserSnap } from '../../lib/admin'
+import { adminGetSessions, adminMarkSessionRead, adminReplyMessage, adminSendProactiveMessage, type AdminSession, type AdminSessionUserSnap } from '../../lib/admin'
 import UserDetailPanel from './UserDetailPanel'
 
 function formatTime(iso: string) {
@@ -148,14 +148,32 @@ export default function MessagesPage() {
   const replyInputRef = useRef<HTMLTextAreaElement>(null)
   // 本次会话内已标记过已读的 session（避免重复调用接口）
   const [readSessions, setReadSessions] = useState<Set<string>>(new Set())
+  // 页面初次加载时，哪些 session_id 下有未读消息（快照，用于「新会话」标签判断）
+  // key: session_id（即 user_id），value: Set<消息id>（该 session 里初次加载时未读的消息）
+  const [initialUnreadSessionIds, setInitialUnreadSessionIds] = useState<Set<string>>(new Set())
   // 跳转到用户详情
   const [viewingUserId, setViewingUserId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const hasInitialLoad = useRef(false)
 
   const load = async () => {
     const data = await adminGetSessions()
     setSessions(data)
     setLoading(false)
+    // 首次加载时，记录哪些真实 session_id 下有未读消息（作为快照）
+    if (!hasInitialLoad.current) {
+      hasInitialLoad.current = true
+      const unreadSet = new Set<string>()
+      for (const s of data) {
+        for (const m of s.messages) {
+          if (!m.admin_read_at) {
+            // 记录该消息所属的真实 session_id
+            unreadSet.add(m.session_id)
+          }
+        }
+      }
+      setInitialUnreadSessionIds(unreadSet)
+    }
     if (!selectedId && data.length > 0) setSelectedId(data[0].session_id)
   }
 
@@ -190,16 +208,28 @@ export default function MessagesPage() {
     if (!selected) return null
     if (replyTargetId) return selected.messages.find((m) => m.id === replyTargetId) ?? null
     // 默认回复最新一条未回复的消息
-    const unreplied = selected.messages.filter((m) => !m.reply)
+    const unreplied = selected.messages.filter((m) => !m.reply && m.content !== '__admin_proactive__')
     return unreplied[unreplied.length - 1] ?? null
   }
 
   const handleReply = async () => {
     const text = replyDraft.trim()
-    const target = getReplyTarget()
-    if (!text || replying || !target) return
+    if (!text || replying || !selected) return
     setReplying(true)
-    const { success } = await adminReplyMessage(target.id, text)
+
+    const target = getReplyTarget()
+    let success = false
+
+    if (target) {
+      // 有未回复的用户消息：给该消息写 reply
+      ;({ success } = await adminReplyMessage(target.id, text))
+    } else {
+      // 没有未回复的消息（全部已回复，或管理员主动发起）：插入新记录
+      const lastMsg = selected.messages[selected.messages.length - 1]
+      const sessionId = lastMsg?.session_id ?? selected.session_id
+      ;({ success } = await adminSendProactiveMessage(selected.user_id, sessionId, text))
+    }
+
     if (success) {
       setReplyDraft('')
       setReplyTargetId(null)
@@ -308,13 +338,19 @@ export default function MessagesPage() {
                 const prevMsg = selected.messages[idx - 1]
                 const isNewSession = idx > 0 && prevMsg.session_id !== msg.session_id
                 const isReplyTarget = replyTargetId === msg.id
+                // 该 session 从此条消息开始，判断是否是页面初次加载时就有未读消息的 session
+                const isUnreadSession = isNewSession && initialUnreadSessionIds.has(msg.session_id)
                 return (
                   <div key={msg.id}>
-                    {/* 会话分隔线 */}
+                    {/* 会话分隔线：未读新会话显示标签，已读只显示时间线 */}
                     {isNewSession && (
                       <div className="flex items-center gap-2 py-2 mb-2">
                         <div className="flex-1 border-t border-white/[0.07]" />
-                        <span className="shrink-0 text-[10px] text-slate-600">新会话 · {formatTime(msg.created_at)}</span>
+                        {isUnreadSession ? (
+                          <span className="shrink-0 text-[10px] text-amber-400/60 bg-amber-400/10 px-2 py-0.5 rounded-full">新会话 · {formatTime(msg.created_at)}</span>
+                        ) : (
+                          <span className="shrink-0 text-[10px] text-slate-700">{formatTime(msg.created_at)}</span>
+                        )}
                         <div className="flex-1 border-t border-white/[0.07]" />
                       </div>
                     )}
@@ -324,8 +360,8 @@ export default function MessagesPage() {
                       <div className="text-[10px] text-slate-600 pl-9 mb-1">📋 {msg.context_info}</div>
                     )}
 
-                    {/* 用户消息 → 左侧 */}
-                    <div className={`flex items-end gap-2 group ${isReplyTarget ? 'ring-1 ring-amber-400/30 rounded-2xl p-1 -m-1' : ''}`}>
+                    {/* 用户消息 → 左侧（占位符消息不展示用户气泡） */}
+                    {msg.content !== '__admin_proactive__' && <div className={`flex items-end gap-2 group ${isReplyTarget ? 'ring-1 ring-amber-400/30 rounded-2xl p-1 -m-1' : ''}`}>
                       <div className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-amber-400/15 text-xs">👤</div>
                       <div className="max-w-[72%]">
                         <div className="rounded-2xl rounded-tl-sm bg-white/[0.08] px-4 py-2.5 text-sm text-slate-100 whitespace-pre-wrap">
@@ -352,7 +388,7 @@ export default function MessagesPage() {
                           )}
                         </div>
                       </div>
-                    </div>
+                    </div>}
 
                     {/* 管理员回复 → 右侧 */}
                     {msg.reply && (
@@ -374,15 +410,10 @@ export default function MessagesPage() {
               <div ref={bottomRef} />
             </div>
 
-            {/* 底部固定回复输入框 */}
+            {/* 底部固定回复输入框（始终显示） */}
             {(() => {
               const target = getReplyTarget()
-              const hasUnreplied = selected.messages.some((m) => !m.reply)
-              if (!hasUnreplied) return (
-                <div className="border-t border-white/[0.07] px-5 py-3 text-center text-xs text-slate-600">
-                  所有消息已回复 ✓
-                </div>
-              )
+              const hasUnreplied = selected.messages.some((m) => !m.reply && m.content !== '__admin_proactive__')
               return (
                 <div className="border-t border-white/[0.07] px-5 py-3 space-y-2">
                   {/* 回复目标提示 */}
@@ -392,12 +423,16 @@ export default function MessagesPage() {
                       <button type="button" onClick={() => setReplyTargetId(null)} className="ml-2 text-slate-600 hover:text-slate-400">✕ 取消</button>
                     </div>
                   )}
+                  {/* 无待回复消息时的提示（不阻止发送） */}
+                  {!hasUnreplied && !replyTargetId && (
+                    <div className="text-[10px] text-slate-600">所有消息已回复 · 可继续发送新消息</div>
+                  )}
                   <div className="flex items-end gap-2">
                     <textarea
                       ref={replyInputRef}
                       value={replyDraft}
                       onChange={(e) => setReplyDraft(e.target.value)}
-                      placeholder={target ? `回复：${target.content.slice(0, 20)}${target.content.length > 20 ? '…' : ''}` : '回复用户…'}
+                      placeholder={target ? `回复：${target.content.slice(0, 20)}${target.content.length > 20 ? '…' : ''}` : '发送消息给用户…'}
                       rows={2}
                       onKeyDown={(e) => {
                         if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); void handleReply() }

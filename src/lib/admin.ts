@@ -454,6 +454,31 @@ export async function adminReplyMessage(
   return { success: !error }
 }
 
+/**
+ * 管理员主动向用户发消息（不依附于用户的某条消息）
+ * 实现方式：插入一条新记录，content 用占位符，reply 填管理员内容
+ * 用户端 dbToUiMessages 会将 reply 渲染为客服消息气泡
+ */
+export async function adminSendProactiveMessage(
+  userId: string,
+  sessionId: string,
+  text: string,
+): Promise<{ success: boolean }> {
+  const now = new Date().toISOString()
+  const { error } = await supabase
+    .from('support_messages')
+    .insert({
+      session_id: sessionId,
+      user_id: userId,
+      content: '__admin_proactive__',   // 占位符，后台不展示用户气泡
+      reply: text,
+      replied_at: now,
+      admin_read_at: now,
+    })
+
+  return { success: !error }
+}
+
 // ─── 数据概览 ─────────────────────────────────────────────────────────────────
 
 /** 获取后台统计数据 */

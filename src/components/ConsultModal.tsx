@@ -38,12 +38,15 @@ function formatTime(iso: string) {
 function dbToUiMessages(rows: DbMessage[]): UiMessage[] {
   const result: UiMessage[] = []
   for (const row of rows) {
-    result.push({
-      id: `user-${row.id}`,
-      role: 'user',
-      content: row.content,
-      created_at: row.created_at,
-    })
+    // 占位符消息（管理员主动发起）：不显示用户气泡，只显示客服回复
+    if (row.content !== '__admin_proactive__') {
+      result.push({
+        id: `user-${row.id}`,
+        role: 'user',
+        content: row.content,
+        created_at: row.created_at,
+      })
+    }
     if (row.reply) {
       result.push({
         id: `reply-${row.id}`,
