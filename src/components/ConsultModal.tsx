@@ -93,12 +93,13 @@ export default function ConsultModal({
     })
   }, [])
 
-  // ── 拉取本次 session 的所有消息及回复 ──
+  // ── 拉取该用户的全部历史消息及回复（按 user_id，跨所有 session） ──
   const fetchMessages = useCallback(async () => {
+    if (!userId) return   // userId 未加载时不查询
     const { data, error } = await supabase
       .from('support_messages')
       .select('id, content, reply, replied_at, created_at, session_id')
-      .eq('session_id', sessionId)
+      .eq('user_id', userId)
       .order('created_at', { ascending: true })
 
     if (error || !data) return
@@ -116,11 +117,11 @@ export default function ConsultModal({
     if (newCount > 0) setNewReplyCount((c) => c + newCount)
 
     setUiMessages([WELCOME_MSG, ...converted])
-  }, [sessionId])
+  }, [sessionId, userId])
 
   // 打开时初始化，并每 15 秒轮询一次回复
   useEffect(() => {
-    if (!open) return
+    if (!open || !userId) return
     setNewReplyCount(0)
     void fetchMessages()
     const timer = setInterval(() => void fetchMessages(), 15_000)
