@@ -301,8 +301,20 @@ export default function MessagesPage() {
 
             {/* 消息流 */}
             <div className="flex-1 overflow-y-auto px-5 py-4 space-y-5">
-              {selected.messages.map((msg) => (
+              {selected.messages.map((msg, idx) => {
+                // 当前消息的 session_id 与上一条不同时，插入会话分隔线
+                const prevMsg = selected.messages[idx - 1]
+                const isNewSession = idx > 0 && prevMsg.session_id !== msg.session_id
+                return (
                 <div key={msg.id} className="space-y-1.5">
+                  {/* 会话分隔线 */}
+                  {isNewSession && (
+                    <div className="flex items-center gap-2 py-1">
+                      <div className="flex-1 border-t border-white/[0.07]" />
+                      <span className="shrink-0 text-[10px] text-slate-600">新会话 · {formatTime(msg.created_at)}</span>
+                      <div className="flex-1 border-t border-white/[0.07]" />
+                    </div>
+                  )}
                   {/* context_info 标签居左（跟随用户消息） */}
                   {msg.context_info && (
                     <div className="text-[10px] text-slate-600 text-left pl-1">📋 {msg.context_info}</div>

@@ -49,6 +49,7 @@ export interface AdminSessionUserSnap {
 }
 
 export interface AdminSession {
+  /** 用户维度的唯一标识（实际就是 user_id） */
   session_id: string
   user_id: string
   user_email: string
@@ -62,6 +63,7 @@ export interface AdminSession {
 
 export interface AdminMessage {
   id: string
+  session_id: string
   content: string
   reply: string | null
   replied_at: string | null
@@ -248,19 +250,20 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
 
   if (error || !data) return []
 
-  // 按 session_id 分组
+  // 按 user_id 分组（同一用户的所有会话合并为一条）
   const sessionMap = new Map<string, {
     user_id: string
     messages: AdminMessage[]
   }>()
 
   for (const row of data) {
-    const sid = row.session_id as string
-    if (!sessionMap.has(sid)) {
-      sessionMap.set(sid, { user_id: row.user_id as string, messages: [] })
+    const uid = (row.user_id as string) || 'anonymous'
+    if (!sessionMap.has(uid)) {
+      sessionMap.set(uid, { user_id: uid, messages: [] })
     }
-    sessionMap.get(sid)!.messages.push({
+    sessionMap.get(uid)!.messages.push({
       id: row.id as string,
+      session_id: row.session_id as string,
       content: row.content as string,
       reply: row.reply as string | null,
       replied_at: row.replied_at as string | null,
@@ -401,24 +404,25 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
     }
   }
 
-  return Array.from(sessionMap.entries()).map(([sid, s]) => {
+  return Array.from(sessionMap.entries()).map(([uid, s]) => {
+    // 消息已按 created_at asc 报入，直接取最后一条
     const msgs = s.messages
     const last = msgs[msgs.length - 1]
     // 有任何一条消息未被管理员读取过，则算未读
     const unread = msgs.filter((m) => !m.admin_read_at).length
-    const reading = latestReadingMap.get(s.user_id)
+    const reading = latestReadingMap.get(uid)
     const userSnap: AdminSessionUserSnap | null = reading ? {
       name: (reading.name as string | undefined) ?? null,
       birth_date: (reading.birth_date as string | undefined) ?? null,
       elements: extractElements(reading.input_data),
-      pillars: null, // 前端计算太重，留 null
-      balance: pointsMap.get(s.user_id) ?? 0,
-      readingCount: readingCountMap.get(s.user_id) ?? 0,
+      pillars: null,
+      balance: pointsMap.get(uid) ?? 0,
+      readingCount: readingCountMap.get(uid) ?? 0,
     } : null
     return {
-      session_id: sid,
-      user_id: s.user_id,
-      user_email: emailMap.get(s.user_id) ?? s.user_id ?? 'anonymous',
+      session_id: uid,   // 用 user_id 作为会话唯一 key
+      user_id: uid,
+      user_email: emailMap.get(uid) ?? uid ?? 'anonymous',
       last_message: last.content,
       last_time: last.created_at,
       unread_count: unread,
@@ -428,12 +432,12 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
   }).sort((a, b) => new Date(b.last_time).getTime() - new Date(a.last_time).getTime())
 }
 
-/** 标记某个 session 下所有消息为管理员已读 */
-export async function adminMarkSessionRead(sessionId: string): Promise<void> {
+/** 标记某个用户的所有消息为管理员已读（session_id 实际上就是 user_id） */
+export async function adminMarkSessionRead(userId: string): Promise<void> {
   await supabase
     .from('support_messages')
     .update({ admin_read_at: new Date().toISOString() })
-    .eq('session_id', sessionId)
+    .eq('user_id', userId)
     .is('admin_read_at', null)  // 只更新还没标记过的，减少写操作
 }
 
