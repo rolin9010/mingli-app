@@ -148,32 +148,14 @@ export default function MessagesPage() {
   const replyInputRef = useRef<HTMLTextAreaElement>(null)
   // 本次会话内已标记过已读的 session（避免重复调用接口）
   const [readSessions, setReadSessions] = useState<Set<string>>(new Set())
-  // 页面初次加载时，哪些 session_id 下有未读消息（快照，用于「新会话」标签判断）
-  // key: session_id（即 user_id），value: Set<消息id>（该 session 里初次加载时未读的消息）
-  const [initialUnreadSessionIds, setInitialUnreadSessionIds] = useState<Set<string>>(new Set())
   // 跳转到用户详情
   const [viewingUserId, setViewingUserId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
-  const hasInitialLoad = useRef(false)
 
   const load = async () => {
     const data = await adminGetSessions()
     setSessions(data)
     setLoading(false)
-    // 首次加载时，记录哪些真实 session_id 下有未读消息（作为快照）
-    if (!hasInitialLoad.current) {
-      hasInitialLoad.current = true
-      const unreadSet = new Set<string>()
-      for (const s of data) {
-        for (const m of s.messages) {
-          if (!m.admin_read_at) {
-            // 记录该消息所属的真实 session_id
-            unreadSet.add(m.session_id)
-          }
-        }
-      }
-      setInitialUnreadSessionIds(unreadSet)
-    }
     if (!selectedId && data.length > 0) setSelectedId(data[0].session_id)
   }
 
@@ -338,19 +320,13 @@ export default function MessagesPage() {
                 const prevMsg = selected.messages[idx - 1]
                 const isNewSession = idx > 0 && prevMsg.session_id !== msg.session_id
                 const isReplyTarget = replyTargetId === msg.id
-                // 该 session 从此条消息开始，判断是否是页面初次加载时就有未读消息的 session
-                const isUnreadSession = isNewSession && initialUnreadSessionIds.has(msg.session_id)
                 return (
                   <div key={msg.id}>
-                    {/* 会话分隔线：未读新会话显示标签，已读只显示时间线 */}
+                    {/* 会话分隔线：只显示时间 */}
                     {isNewSession && (
                       <div className="flex items-center gap-2 py-2 mb-2">
                         <div className="flex-1 border-t border-white/[0.07]" />
-                        {isUnreadSession ? (
-                          <span className="shrink-0 text-[10px] text-amber-400/60 bg-amber-400/10 px-2 py-0.5 rounded-full">新会话 · {formatTime(msg.created_at)}</span>
-                        ) : (
-                          <span className="shrink-0 text-[10px] text-slate-700">{formatTime(msg.created_at)}</span>
-                        )}
+                        <span className="shrink-0 text-[10px] text-slate-700">{formatTime(msg.created_at)}</span>
                         <div className="flex-1 border-t border-white/[0.07]" />
                       </div>
                     )}
