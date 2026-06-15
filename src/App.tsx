@@ -68,54 +68,55 @@ function TopNav({
   const { balance } = usePoints()
   const [showPointsModal, setShowPointsModal] = useState(false)
   const [showUserMenu, setShowUserMenu] = useState(false)
-  // 未读客服回复红点
-  const [hasUnreadReply, setHasUnreadReply] = useState(false)
-  const shownReplyIds = useRef<Set<string>>(new Set())
+  // 未读客服回复数量
+  const [unreadCount, setUnreadCount] = useState(0)
+  // 已见过的 reply id 集合（用于增量判断），初始从 localStorage 恢复
+  const seenReplyIds = useRef<Set<string>>((() => {
+    try {
+      const saved = localStorage.getItem('seen_reply_ids')
+      return new Set<string>(saved ? (JSON.parse(saved) as string[]) : [])
+    } catch { return new Set<string>() }
+  })())
 
-  // 定期轮询，检测该用户是否有未读回复
+  // 持久化已见 id 到 localStorage
+  const persistSeen = () => {
+    try {
+      localStorage.setItem('seen_reply_ids', JSON.stringify([...seenReplyIds.current]))
+    } catch {}
+  }
+
+  // 轮询：统计有回复但用户还没看过的消息数
   const checkUnread = useCallback(async () => {
     if (!user) return
-    const { supabase } = await import('./lib/supabase')
     const { data } = await supabase
       .from('support_messages')
-      .select('id, reply')
+      .select('id')
       .eq('user_id', user.id)
       .not('reply', 'is', null)
     if (!data) return
-    let hasNew = false
-    for (const row of data) {
-      const id = `reply-${row.id as string}`
-      if (!shownReplyIds.current.has(id)) {
-        hasNew = true
-        // 不加入 shownReplyIds，让红点一直显示直到用户打开弹窗
-      }
-    }
-    if (hasNew) setHasUnreadReply(true)
+    const count = data.filter((row) => !seenReplyIds.current.has(row.id as string)).length
+    setUnreadCount(count)
   }, [user])
 
   useEffect(() => {
     if (!user) return
     void checkUnread()
-    const t = setInterval(() => void checkUnread(), 30_000)
+    const t = setInterval(() => void checkUnread(), 20_000)
     return () => clearInterval(t)
   }, [user, checkUnread])
 
   const handleOpenConsult = () => {
-    // 打开咨询弹窗时，把所有已有回复 id 标为已见（清除红点）
-    setHasUnreadReply(false)
-    import('./lib/supabase').then(({ supabase }) => {
-      if (!user) return
-      supabase
-        .from('support_messages')
-        .select('id')
-        .eq('user_id', user.id)
-        .not('reply', 'is', null)
-        .then(({ data }) => {
-          for (const row of (data ?? [])) {
-            shownReplyIds.current.add(`reply-${row.id as string}`)
-          }
-        })
-    })
+    // 打开弹窗时：把所有当前有回复的消息 id 标记为已见，清零计数
+    supabase
+      .from('support_messages')
+      .select('id')
+      .eq('user_id', user?.id ?? '')
+      .not('reply', 'is', null)
+      .then(({ data }) => {
+        for (const row of (data ?? [])) seenReplyIds.current.add(row.id as string)
+        persistSeen()
+        setUnreadCount(0)
+      })
     onOpenConsult()
   }
 
@@ -166,22 +167,6 @@ function TopNav({
               <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M12 8v4l3 3"/><circle cx="12" cy="12" r="9"/></svg>
               历史记录
             </button>
-            {/* 消息提醒（仅登录用户可见） */}
-            {user && (
-              <button
-                type="button"
-                onClick={handleOpenConsult}
-                title="客服消息"
-                className="relative hidden sm:flex items-center justify-center rounded-lg px-2.5 py-1.5 text-slate-400 hover:text-amber-200 transition-colors"
-              >
-                <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
-                  <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-                </svg>
-                {hasUnreadReply && (
-                  <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-rose-500 ring-1 ring-black animate-pulse" />
-                )}
-              </button>
-            )}
             {/* 移动端积分角标 */}
             <button
               type="button"
@@ -228,6 +213,17 @@ function TopNav({
                           label="历史记录"
                           onClick={() => { closeMenu(); onHistory() }}
                         />
+                        <DropdownItem
+                          icon={
+                            <svg className="h-4 w-4 text-slate-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                              <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                            </svg>
+                          }
+                          label="客服消息"
+                          badge={unreadCount > 0 ? String(unreadCount) : undefined}
+                          badgeDanger={unreadCount > 0}
+                          onClick={() => { closeMenu(); handleOpenConsult() }}
+                        />
                         <div className="my-1 border-t border-white/8" />
                         <DropdownItem
                           icon={<svg className="h-4 w-4 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>}
@@ -263,12 +259,14 @@ function DropdownItem({
   icon,
   label,
   badge,
+  badgeDanger,
   danger,
   onClick,
 }: {
   icon: React.ReactNode
   label: string
   badge?: string
+  badgeDanger?: boolean
   danger?: boolean
   onClick: () => void
 }) {
@@ -283,7 +281,11 @@ function DropdownItem({
       <span className="shrink-0">{icon}</span>
       <span className="flex-1 text-left">{label}</span>
       {badge && (
-        <span className="rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-300">
+        <span className={`rounded-full px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+          badgeDanger
+            ? 'bg-rose-500/20 text-rose-400'
+            : 'bg-amber-400/20 text-amber-300'
+        }`}>
           {badge}
         </span>
       )}
