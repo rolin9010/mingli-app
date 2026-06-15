@@ -15,9 +15,12 @@ export default function MessagesPage() {
   const [sessions, setSessions] = useState<AdminSession[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [replyText, setReplyText] = useState('')
+  // 用 Map<msgId, text> 分别存每条消息的回复草稿，避免多条消息共享一个 state
+  const [replyDrafts, setReplyDrafts] = useState<Map<string, string>>(new Map())
   const [replying, setReplying] = useState(false)
   const [replyingMsgId, setReplyingMsgId] = useState<string | null>(null)
+  // 本地已读 set，点击会话后标记为已读（视觉上消除红点）
+  const [readSessions, setReadSessions] = useState<Set<string>>(new Set())
   const bottomRef = useRef<HTMLDivElement>(null)
 
   const load = async () => {
@@ -33,15 +36,31 @@ export default function MessagesPage() {
     bottomRef.current?.scrollIntoView({ behavior: 'smooth' })
   }, [selectedId, sessions])
 
+  const handleSelectSession = (sid: string) => {
+    setSelectedId(sid)
+    // 点击即标记已读
+    setReadSessions((prev) => new Set([...prev, sid]))
+  }
+
   const selected = sessions.find((s) => s.session_id === selectedId)
 
+  const setDraft = (msgId: string, text: string) => {
+    setReplyDrafts((prev) => {
+      const next = new Map(prev)
+      next.set(msgId, text)
+      return next
+    })
+  }
+
   const handleReply = async (msg: AdminMessage) => {
-    if (!replyText.trim() || replying) return
+    const text = (replyDrafts.get(msg.id) ?? '').trim()
+    if (!text || replying) return
     setReplying(true)
     setReplyingMsgId(msg.id)
-    const { success } = await adminReplyMessage(msg.id, replyText.trim())
+    const { success } = await adminReplyMessage(msg.id, text)
     if (success) {
-      setReplyText('')
+      // 清空这条消息的草稿
+      setReplyDrafts((prev) => { const next = new Map(prev); next.delete(msg.id); return next })
       await load()
     }
     setReplying(false)
@@ -64,29 +83,33 @@ export default function MessagesPage() {
           {sessions.length === 0 ? (
             <div className="py-10 text-center text-xs text-slate-600">暂无消息</div>
           ) : (
-            sessions.map((s) => (
-              <button
-                key={s.session_id}
-                type="button"
-                onClick={() => setSelectedId(s.session_id)}
-                className={`w-full border-b border-white/[0.04] px-4 py-3 text-left transition-colors hover:bg-white/[0.04] ${
-                  selectedId === s.session_id ? 'bg-amber-400/10' : ''
-                }`}
-              >
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-xs font-medium text-slate-200 truncate max-w-[120px]">
-                    {s.user_email}
-                  </span>
-                  {s.unread_count > 0 && (
-                    <span className="ml-1 shrink-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
-                      {s.unread_count}
+            sessions.map((s) => {
+              const isRead = readSessions.has(s.session_id)
+              const showBadge = s.unread_count > 0 && !isRead
+              return (
+                <button
+                  key={s.session_id}
+                  type="button"
+                  onClick={() => handleSelectSession(s.session_id)}
+                  className={`w-full border-b border-white/[0.04] px-4 py-3 text-left transition-colors hover:bg-white/[0.04] ${
+                    selectedId === s.session_id ? 'bg-amber-400/10' : ''
+                  }`}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-xs font-medium text-slate-200 truncate max-w-[120px]">
+                      {s.user_email}
                     </span>
-                  )}
-                </div>
-                <div className="text-[11px] text-slate-500 truncate">{s.last_message}</div>
-                <div className="mt-1 text-[10px] text-slate-600">{formatTime(s.last_time)}</div>
-              </button>
-            ))
+                    {showBadge && (
+                      <span className="ml-1 shrink-0 rounded-full bg-rose-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                        {s.unread_count}
+                      </span>
+                    )}
+                  </div>
+                  <div className="text-[11px] text-slate-500 truncate">{s.last_message}</div>
+                  <div className="mt-1 text-[10px] text-slate-600">{formatTime(s.last_time)}</div>
+                </button>
+              )
+            })
           )}
         </div>
       </div>
@@ -121,7 +144,7 @@ export default function MessagesPage() {
                   </div>
                   <div className="text-right text-[10px] text-slate-600">{formatTime(msg.created_at)}</div>
 
-                  {/* 回复 */}
+                  {/* 已回复 */}
                   {msg.reply ? (
                     <div className="space-y-1">
                       <div className="flex justify-start">
@@ -135,8 +158,8 @@ export default function MessagesPage() {
                     /* 未回复：内联回复框 */
                     <div className="flex items-end gap-2 ml-4">
                       <textarea
-                        value={replyingMsgId === msg.id ? replyText : ''}
-                        onChange={(e) => { setReplyingMsgId(msg.id); setReplyText(e.target.value) }}
+                        value={replyDrafts.get(msg.id) ?? ''}
+                        onChange={(e) => setDraft(msg.id, e.target.value)}
                         placeholder="输入回复…（Enter 发送，Shift+Enter 换行）"
                         rows={2}
                         onKeyDown={(e) => {
@@ -146,7 +169,7 @@ export default function MessagesPage() {
                       />
                       <button
                         type="button"
-                        disabled={replying || !replyText.trim() || replyingMsgId !== msg.id}
+                        disabled={replying || !(replyDrafts.get(msg.id) ?? '').trim()}
                         onClick={() => void handleReply(msg)}
                         className="shrink-0 rounded-xl bg-amber-500/70 px-3 py-2 text-xs font-medium text-white hover:bg-amber-400 disabled:opacity-40 transition-colors"
                       >
