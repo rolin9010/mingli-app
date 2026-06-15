@@ -319,10 +319,21 @@ export async function adminGetStats(): Promise<AdminStats> {
 
   const todayConsumed = (pointsRes.data ?? []).reduce((sum, r) => sum + Math.abs(r.amount as number), 0)
 
-  // 总用户数（从 user_points 表行数粗估）
-  const { count: totalUsers } = await supabase
-    .from('user_points')
-    .select('user_id', { count: 'exact', head: true })
+  // 总用户数：查 admin_user_count view（从 auth.users 计数，最准确）
+  // 如果 view 不存在则兜底用 user_points 表
+  let totalUsers = 0
+  const { data: countViewData } = await supabase
+    .from('admin_user_count')
+    .select('total')
+    .single()
+  if (countViewData && (countViewData as { total: number }).total) {
+    totalUsers = Number((countViewData as { total: number }).total)
+  } else {
+    const { count: fallbackCount } = await supabase
+      .from('user_points')
+      .select('user_id', { count: 'exact', head: true })
+    totalUsers = fallbackCount ?? 0
+  }
 
   return {
     totalUsers: totalUsers ?? 0,
