@@ -21,6 +21,7 @@ import PointsModal, { PointsBadge } from '../components/PointsModal'
 import ConsultModal from '../components/ConsultModal'
 import type { ReportResults, UserInput } from '../lib/types'
 import { Step2ChartsSection } from './Step2Results'
+import DailyTip from '../components/DailyTip'
 
 // ─── Tab 主题定义 ──────────────────────────────────────────────────────────────
 
@@ -291,6 +292,9 @@ const text = await fetchAIReading(prompt)
         <div className="space-y-5">
           <Step2ChartsSection input={input} results={results} />
         </div>
+
+        {/* 五行贴士·今日 */}
+        <DailyTip input={input} results={results} />
 
         {/* AI 解读区 */}
         <div className="w-full">

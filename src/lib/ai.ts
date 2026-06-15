@@ -358,6 +358,64 @@ export async function fetchHeBanAIReading(prompt: string): Promise<string> {
   throw new Error('重试失败')
 }
 
+// ── 五行每日贴士 ─────────────────────────────────────────────────────────────
+
+const DAILY_TIP_SYSTEM_PROMPT = `你是一位精通中国传统命理学（四柱八字）与阴阳五行养生的导师。
+每天根据用户的五行格局与当日天干地支，给出一条简短、温暖、实用的养生/能量贴士。
+
+要求：
+1. 只输出一条贴士，字数在 60-120 字之间，语言亲切口语化，像朋友发的一条暖心消息。
+2. 内容必须结合用户的具体五行旺衰（引用具体百分比数字）+ 今日干支能量，给出今天特别适合做的 1 件具体事情。
+3. 末尾附一个对应五行的 Emoji（木🌿 火🔥 土🌍 金✨ 水💧），只用一个。
+4. 不出现标题、不分段，直接输出正文。
+5. 禁止出现紫微斗数、星盘、MBTI、血型等非五行内容。`
+
+export function buildDailyTipPrompt(input: any, results: any, dateStr: string): string {
+  const { name, birth, gender } = input
+  const { bazi } = results
+  const elements =
+    bazi?.elements?.map((e: any) => `${e.element}占${Number(e.percent).toFixed(1)}%`).join('、') ?? ''
+  const pillars = bazi?.pillars
+  const age = new Date().getFullYear() - birth.year
+
+  return `【用户信息】
+姓名：${name}，性别：${gender}，年龄：${age}岁
+五行分布：${elements}
+四柱：年柱${pillars?.year} / 月柱${pillars?.month} / 日柱${pillars?.day} / 时柱${pillars?.hour}
+
+【今日日期】${dateStr}
+
+请基于以上信息，为${name}生成今天的五行养生贴士（60-120字，口语化，末尾一个Emoji）。`
+}
+
+export async function fetchDailyTip(prompt: string): Promise<string> {
+  for (let i = 0; i < 3; i++) {
+    try {
+      const res = await fetch('https://api.deepseek.com/chat/completions', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY}` },
+        body: JSON.stringify({
+          model: 'deepseek-chat',
+          messages: [
+            { role: 'system', content: DAILY_TIP_SYSTEM_PROMPT },
+            { role: 'user', content: prompt },
+          ],
+          temperature: 0.9,
+          max_tokens: 300,
+        }),
+      })
+      const text = await res.text()
+      if (!res.ok) throw new Error(`AI API 错误: ${res.status} ${text}`)
+      const data = JSON.parse(text)
+      return data.choices[0].message.content as string
+    } catch (e: any) {
+      if (i === 2) throw e
+      await new Promise((r) => setTimeout(r, 1000))
+    }
+  }
+  throw new Error('重试失败')
+}
+
 export function buildReadingPrompt(input: any, results: any, mode: 'quick' | 'deep' = 'quick'): string {
   const { name, birth, gender } = input
   const { bazi } = results

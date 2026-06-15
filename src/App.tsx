@@ -15,6 +15,8 @@ import RegisterPage from './pages/RegisterPage'
 import HistoryPage from './pages/HistoryPage'
 import type { HeBanResults, HeBanUserInput, ReportResults, UserInput } from './lib/types'
 import PrivateRoute from './components/PrivateRoute'
+import AdminRoute from './components/AdminRoute'
+import AdminPage from './pages/admin/AdminPage'
 
 const Step3Report = lazy(() => import('./pages/Step3Report'))
 const HeBanReport = lazy(() => import('./pages/HeBanReport'))
@@ -428,6 +430,14 @@ export default function App() {
         />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route
+          path="/admin"
+          element={
+            <AdminRoute>
+              <AdminPage />
+            </AdminRoute>
+          }
+        />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </PointsProvider>
