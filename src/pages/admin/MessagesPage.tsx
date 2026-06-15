@@ -151,12 +151,16 @@ export default function MessagesPage() {
   // 跳转到用户详情
   const [viewingUserId, setViewingUserId] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  // 用 ref 追踪最新的 selectedId，避免 load() 闭包捕获旧值
+  const selectedIdRef = useRef<string | null>(null)
+  selectedIdRef.current = selectedId
 
   const load = async () => {
     const data = await adminGetSessions()
     setSessions(data)
     setLoading(false)
-    if (!selectedId && data.length > 0) setSelectedId(data[0].session_id)
+    // 用 ref 读最新值，避免闭包问题
+    if (!selectedIdRef.current && data.length > 0) setSelectedId(data[0].session_id)
   }
 
   useEffect(() => { void load() }, [])

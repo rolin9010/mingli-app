@@ -446,13 +446,14 @@ export async function adminReplyMessage(
   messageId: string,
   reply: string,
 ): Promise<{ success: boolean }> {
-  const { error } = await supabase
+  const { error, data } = await supabase
     .from('support_messages')
     .update({ reply, replied_at: new Date().toISOString(), admin_read_at: new Date().toISOString() })
     .eq('id', messageId)
+    .select()
 
-  if (error) console.error('[adminReplyMessage] error:', error)
-  return { success: !error }
+  console.log('[adminReplyMessage] messageId:', messageId, 'updated rows:', data?.length, 'error:', error)
+  return { success: !error && (data?.length ?? 0) > 0 }
 }
 
 /**
