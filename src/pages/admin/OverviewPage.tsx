@@ -42,7 +42,7 @@ export default function OverviewPage() {
 
       {/* 近 7 天图表 */}
       <div className="rounded-2xl border border-white/[0.07] bg-[#111] p-5">
-        <h2 className="mb-6 text-sm font-medium text-slate-300">近 7 天测算活跃（按日）</h2>
+        <h2 className="mb-10 text-sm font-medium text-slate-300">近 7 天测算活跃（按日）</h2>
         {/* 固定高度容器，用绝对定位让柱子从底部生长 */}
         <div className="flex items-end gap-3" style={{ height: 120 }}>
           {stats.dailyRegistrations.map((d) => {

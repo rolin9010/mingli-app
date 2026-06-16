@@ -314,6 +314,9 @@ function WizardApp({ user }: { user: User | null }) {
   const [showHistory, setShowHistory] = useState(false)
   const [showConsult, setShowConsult] = useState(false)
 
+  // 检测是否从微信小程序 WebView 打开（隐藏顶部导航栏）
+  const isMiniprogram = new URLSearchParams(window.location.search).get('miniprogram') === '1'
+
   useEffect(() => {
     if (step === 2 && input && results) {
       saveWizardSnapshot(2, input, results)
@@ -345,14 +348,16 @@ function WizardApp({ user }: { user: User | null }) {
 
   return (
     <div className="min-h-screen">
-      <TopNav
-        user={user}
-        onOpenAuth={() => setShowAuth(true)}
-        onHistory={() => setShowHistory(true)}
-        onHome={goHome}
-        showHistory={showHistory}
-        onOpenConsult={() => setShowConsult(true)}
-      />
+      {!isMiniprogram && (
+        <TopNav
+          user={user}
+          onOpenAuth={() => setShowAuth(true)}
+          onHistory={() => setShowHistory(true)}
+          onHome={goHome}
+          showHistory={showHistory}
+          onOpenConsult={() => setShowConsult(true)}
+        />
+      )}
       {showAuth ? <AuthModal onClose={() => setShowAuth(false)} onSuccess={() => setShowAuth(false)} /> : null}
       {/* 全局客服弹窗（从导航栏消息图标触发） */}
       {showConsult && (
@@ -362,8 +367,8 @@ function WizardApp({ user }: { user: User | null }) {
         />
       )}
 
-      {/* 内容区域，padding-top 留出 nav 高度 */}
-      <div className="pt-14">
+      {/* 内容区域：小程序模式不留导航栏高度 */}
+      <div className={isMiniprogram ? '' : 'pt-14'}>
         {showHistory ? (
           <HistoryPage onBack={() => setShowHistory(false)} />
         ) : (
