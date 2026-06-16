@@ -18,6 +18,9 @@ html {
   /* 与 body 同色，避免橡皮筋滚动露白 */
   background-color: #050509;
   height: 100%;
+  /* 防止微信 WebView 里水平溢出导致布局偏移 */
+  overflow-x: hidden;
+  max-width: 100%;
 }
 
 html,

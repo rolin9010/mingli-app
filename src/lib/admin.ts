@@ -538,3 +538,49 @@ export async function adminGetStats(): Promise<AdminStats> {
      })),
   }
 }
+
+// ─── 按日期查测算记录（概览柱状图点击用） ────────────────────────────────────
+
+export interface DayReadingItem {
+  id: string
+  user_id: string
+  user_email: string
+  name: string | null
+  birth_date: string | null
+  created_at: string
+  input_data: unknown
+  ai_report: string | null
+}
+
+/** 查询某天（YYYY-MM-DD）所有测算记录，按用户聚合后返回 */
+export async function adminGetReadingsByDate(date: string): Promise<DayReadingItem[]> {
+  const start = date + 'T00:00:00.000Z'
+  const end   = date + 'T23:59:59.999Z'
+
+  const { data, error } = await supabase
+    .from('readings')
+    .select('id, user_id, user_email, name, birth_date, created_at, input_data, ai_report')
+    .gte('created_at', start)
+    .lte('created_at', end)
+    .order('created_at', { ascending: false })
+
+  if (error || !data) return []
+
+  // 补充邮箱（优先用 admin_users_view）
+  const userIds = [...new Set((data as { user_id: string }[]).map((r) => r.user_id).filter(Boolean))]
+  let emailMap = new Map<string, string>()
+  if (userIds.length > 0) {
+    const { data: viewData } = await supabase
+      .from('admin_users_view')
+      .select('id, email')
+      .in('id', userIds)
+    for (const r of (viewData ?? []) as { id: string; email: string }[]) {
+      if (r.id && r.email) emailMap.set(r.id, r.email)
+    }
+  }
+
+  return (data as DayReadingItem[]).map((r) => ({
+    ...r,
+    user_email: emailMap.get(r.user_id) ?? r.user_email ?? r.user_id,
+  }))
+}
