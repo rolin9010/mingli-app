@@ -462,12 +462,11 @@ export async function adminGetStats(): Promise<AdminStats> {
   const sevenDaysAgo = days[0] + 'T00:00:00.000Z'
 
   const [pendingRes, pointsRes, readingsCountRes, todayReadingsRes] = await Promise.all([
-    // 待回复消息数（按用户维度：有未回复消息的用户数，排除管理员主动发送的占位符行）
+    // 拉取所有消息的 user_id、content、reply，后面在 JS 端按用户维度判断
     supabase
       .from('support_messages')
-      .select('user_id')
-      .is('reply', null)
-      .neq('content', '__admin_proactive__'),
+      .select('user_id, content, reply')
+      .order('created_at', { ascending: true }),
     // 今日积分消耗
     supabase
       .from('points_records')
@@ -516,8 +515,23 @@ export async function adminGetStats(): Promise<AdminStats> {
     totalUsers: totalUsers ?? 0,
     todayRegistered: todayReadingsRes.count ?? 0,
     todayPointsConsumed: todayConsumed,
-    // 按用户维度去重：有未回复消息的用户数
-    pendingMessages: new Set((pendingRes.data ?? []).map((r) => (r as { user_id: string }).user_id).filter(Boolean)).size,
+    // 待回复用户数：按用户分组，取每个用户最后一条真实消息（排除占位符），若未回复则算待回复
+    pendingMessages: (() => {
+      type MsgRow = { user_id: string; content: string; reply: string | null }
+      const allMsgs = (pendingRes.data ?? []) as MsgRow[]
+      // 按 user_id 聚合，只保留最后一条真实消息（已按 created_at asc，直接取最后出现的）
+      const lastRealMsg = new Map<string, MsgRow>()
+      for (const m of allMsgs) {
+        if (!m.user_id || m.content === '__admin_proactive__') continue
+        lastRealMsg.set(m.user_id, m)  // 后覆盖前，最终留下时间最新的
+      }
+      // 统计最后一条真实消息没有回复的用户数
+      let count = 0
+      for (const msg of lastRealMsg.values()) {
+        if (!msg.reply) count++
+      }
+      return count
+    })(),
     dailyRegistrations: days.map((d) => ({
       date: d,
       count: dayCountMap.get(d)?.size ?? 0,
