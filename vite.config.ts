@@ -1,8 +1,17 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import legacy from '@vitejs/plugin-legacy'
 
 export default defineConfig({
-  plugins: [react()],
+  plugins: [
+    react(),
+    // 为微信 WebView 等旧版内核生成传统格式（非 ES Module）降级包
+    legacy({
+      targets: ['ios >= 10', 'android >= 5', 'chrome >= 49'],
+      additionalLegacyPolyfills: ['regenerator-runtime/runtime'],
+      renderLegacyChunks: true,
+    }),
+  ],
   build: {
     /** lunar-javascript 体积大，单独成包便于缓存与并行加载 */
     rollupOptions: {
