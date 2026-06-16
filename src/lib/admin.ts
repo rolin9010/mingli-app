@@ -485,12 +485,12 @@ export async function adminGetStats(): Promise<AdminStats> {
       .gte('created_at', today + 'T00:00:00.000Z'),
   ])
 
-  // 统计近 7 天每日测算量（按 user_id 近似注册）
-  const dayCountMap = new Map<string, Set<string>>()
-  days.forEach((d) => dayCountMap.set(d, new Set()))
+  // 统计近 7 天每日测算条数
+  const dayCountMap = new Map<string, number>()
+  days.forEach((d) => dayCountMap.set(d, 0))
   for (const r of readingsCountRes.data ?? []) {
     const day = (r.created_at as string).slice(0, 10)
-    if (dayCountMap.has(day)) dayCountMap.get(day)!.add(r.user_id as string)
+    if (dayCountMap.has(day)) dayCountMap.set(day, (dayCountMap.get(day) ?? 0) + 1)
   }
 
   const todayConsumed = (pointsRes.data ?? []).reduce((sum, r) => sum + Math.abs(r.amount as number), 0)
@@ -533,8 +533,8 @@ export async function adminGetStats(): Promise<AdminStats> {
       return count
     })(),
     dailyRegistrations: days.map((d) => ({
-      date: d,
-      count: dayCountMap.get(d)?.size ?? 0,
-    })),
+       date: d,
+       count: dayCountMap.get(d) ?? 0,
+     })),
   }
 }
