@@ -1,7 +1,7 @@
 import { type ReactNode, useState } from 'react'
 import { supabase } from '../../lib/supabase'
 
-export type AdminTab = 'overview' | 'messages' | 'users' | 'points'
+export type AdminTab = 'overview' | 'messages' | 'users'
 
 interface Props {
   tab: AdminTab
@@ -22,11 +22,8 @@ const TABS: { key: AdminTab; label: string; icon: ReactNode }[] = [
     key: 'users', label: '用户管理',
     icon: <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>,
   },
-  {
-    key: 'points', label: '积分管理',
-    icon: <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="4" fill="currentColor" fillOpacity="0.2"/></svg>,
-  },
 ]
+
 
 export default function AdminLayout({ tab, onTabChange, children }: Props) {
   const [sidebarOpen, setSidebarOpen] = useState(false)
