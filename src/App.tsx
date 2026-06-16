@@ -320,24 +320,12 @@ function WizardApp({ user }: { user: User | null }) {
   // 小程序模式：修复各种 WebView 兼容问题
   useEffect(() => {
     if (!isMiniprogram) return
-    // 去掉复杂星空背景（WebView 渲染会导致 overflow 计算异常、左边 padding 丢失）
+    // 给 html 加 class，触发 CSS 里的小程序专用修复规则
+    document.documentElement.classList.add('mp-webview')
     document.documentElement.style.setProperty('--bg-attachment', 'scroll')
+    // 修复 0.5px 边框在微信 WebView 里消失
     const style = document.createElement('style')
-    style.textContent = `
-      .border:not(.border-0){border-width:1px!important}
-      html, body {
-        overflow-x: hidden !important;
-        width: 100% !important;
-        max-width: 100% !important;
-        background-image: none !important;
-        background-attachment: scroll !important;
-      }
-      #root {
-        width: 100% !important;
-        overflow-x: hidden !important;
-        box-sizing: border-box !important;
-      }
-    `
+    style.textContent = `.border:not(.border-0){border-width:1px!important}`
     document.head.appendChild(style)
   }, [isMiniprogram])
 

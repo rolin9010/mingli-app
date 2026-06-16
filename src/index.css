@@ -94,6 +94,19 @@ body {
   background: transparent;
 }
 
+/* 微信小程序 WebView 模式：修复布局溢出导致左边 padding 消失 */
+html.mp-webview,
+html.mp-webview body,
+html.mp-webview #root {
+  width: 100% !important;
+  max-width: 100vw !important;
+  overflow-x: hidden !important;
+  box-sizing: border-box !important;
+}
+html.mp-webview body {
+  background-image: none !important;
+}
+
 /* 全局细线边框：默认 border 类由 1px 收至 0.5px；原 border-2 收至 1px，更精致 */
 @layer utilities {
   .border:not(.border-0) {
