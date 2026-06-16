@@ -4,6 +4,7 @@
  */
 
 import { supabase } from './supabase'
+import { calcBazi } from './mingli/bazi'
 
 // ─── 类型 ─────────────────────────────────────────────────────────────────────
 
@@ -326,116 +327,41 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
     if (!latestReadingMap.has(r.user_id)) latestReadingMap.set(r.user_id, r)
   }
 
-  /** 从 input_data 提取四柱八字 */
-  function extractPillars(inputData: unknown): string[] | null {
+  /**
+   * 从 input_data 提取八字四柱 + 五行占比
+   * 直接调用 calcBazi（lunar-javascript，带节气修正），确保准确
+   */
+  function extractBazi(inputData: unknown): {
+    pillars: string[] | null
+    elements: { element: string; percent: number }[] | null
+  } {
     try {
-      if (!inputData || typeof inputData !== 'object') return null
+      if (!inputData || typeof inputData !== 'object') return { pillars: null, elements: null }
       const data = inputData as Record<string, unknown>
+      // 单人：{ birth: { year, month, day, hour, minute? }, calendarType? }
+      // 合盘：{ personA: { birth: ..., calendarType? }, ... }
       const birth = (data.birth as Record<string, number> | undefined) ??
         ((data.personA as Record<string, unknown> | undefined)?.birth as Record<string, number> | undefined)
-      if (!birth?.year) return null
-      const tianGan = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']
-      const diZhi = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']
-      const y = Number(birth.year), m = Number(birth.month ?? 1), d = Number(birth.day ?? 1), h = Number(birth.hour ?? 0)
-      const yearStem = tianGan[(y - 4) % 10]
-      const yearBranch = diZhi[(y - 4) % 12]
-      const monthBranchIdx = ((m - 1) + 2) % 12
-      const monthStemBase = (((y - 4) % 5) * 2) % 10
-      const monthStem = tianGan[(monthStemBase + (m - 1)) % 10]
-      const monthBranch = diZhi[monthBranchIdx]
-      const julianDay = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d - 1524
-      const dayStemIdx = (julianDay + 9) % 10
-      const dayBranchIdx = (julianDay + 11) % 12
-      const dayStem = tianGan[dayStemIdx]
-      const dayBranch = diZhi[dayBranchIdx]
-      const hourBranchIdx = Math.floor((h + 1) / 2) % 12
-      const hourStemBase = (dayStemIdx % 5) * 2
-      const hourStem = tianGan[(hourStemBase + hourBranchIdx) % 10]
-      const hourBranch = diZhi[hourBranchIdx]
-      return [
-        yearStem + yearBranch,
-        monthStem + monthBranch,
-        dayStem + dayBranch,
-        hourStem + hourBranch,
-      ]
-    } catch { return null }
-  }
+      if (!birth?.year) return { pillars: null, elements: null }
 
-  /** 从 input_data 里用纯 JS 计算五行占比（不依赖 bazi.ts，避免循环依赖） */
-  function extractElements(inputData: unknown): { element: string; percent: number }[] | null {
-    try {
-      if (!inputData || typeof inputData !== 'object') return null
-      const data = inputData as Record<string, unknown>
-      // 单人：{ birth: { year, month, day, hour } }
-      // 合盘：{ personA: { birth: ... }, personB: { birth: ... } }
-      const birth = (data.birth as Record<string, number> | undefined) ??
-        ((data.personA as Record<string, unknown> | undefined)?.birth as Record<string, number> | undefined)
-      if (!birth?.year) return null
+      const calendarType = ((data.calendarType as string | undefined) ??
+        ((data.personA as Record<string, unknown> | undefined)?.calendarType as string | undefined) ??
+        '公历') as '公历' | '农历'
 
-      // 天干五行映射
-      const stemEl: Record<string, string> = {
-        甲:'木',乙:'木',丙:'火',丁:'火',戊:'土',己:'土',庚:'金',辛:'金',壬:'水',癸:'水'
+      const birthInput = {
+        year: Number(birth.year),
+        month: Number(birth.month ?? 1),
+        day: Number(birth.day ?? 1),
+        hour: Number(birth.hour ?? 0),
+        minute: Number(birth.minute ?? 0),
       }
-      // 地支藏干
-      const branchHidden: Record<string, {stem:string;weight:number}[]> = {
-        子:[{stem:'癸',weight:10}],
-        丑:[{stem:'己',weight:6},{stem:'癸',weight:3},{stem:'辛',weight:1}],
-        寅:[{stem:'甲',weight:7},{stem:'丙',weight:2},{stem:'戊',weight:1}],
-        卯:[{stem:'乙',weight:10}],
-        辰:[{stem:'戊',weight:6},{stem:'乙',weight:3},{stem:'癸',weight:1}],
-        巳:[{stem:'丙',weight:7},{stem:'庚',weight:2},{stem:'戊',weight:1}],
-        午:[{stem:'丁',weight:7},{stem:'己',weight:3}],
-        未:[{stem:'己',weight:6},{stem:'丁',weight:3},{stem:'乙',weight:1}],
-        申:[{stem:'庚',weight:7},{stem:'壬',weight:2},{stem:'戊',weight:1}],
-        酉:[{stem:'辛',weight:10}],
-        戌:[{stem:'戊',weight:6},{stem:'辛',weight:3},{stem:'丁',weight:1}],
-        亥:[{stem:'壬',weight:7},{stem:'甲',weight:3}],
-      }
-      const tianGan = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']
-      const diZhi = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']
-      // 简化版：用年份推算年柱（仅粗估，不做节气修正）
-      const y = Number(birth.year)
-      const m = Number(birth.month ?? 1)
-      const d = Number(birth.day ?? 1)
-      const h = Number(birth.hour ?? 0)
-      const yearStem = tianGan[(y - 4) % 10]
-      const yearBranch = diZhi[(y - 4) % 12]
-      // 月支（粗估，不做节气）：月 1-12 对应 寅卯辰巳午未申酉戌亥子丑
-      const monthBranchIdx = ((m - 1) + 2) % 12
-      const monthBranch = diZhi[monthBranchIdx]
-      const monthStemBase = (((y - 4) % 5) * 2) % 10
-      const monthStem = tianGan[(monthStemBase + (m - 1)) % 10]
-      // 日柱：用简化儒略日
-      const julianDay = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d - 1524
-      const dayStemIdx = (julianDay + 9) % 10
-      const dayBranchIdx = (julianDay + 11) % 12
-      const dayStem = tianGan[dayStemIdx]
-      const dayBranch = diZhi[dayBranchIdx]
-      // 时柱
-      const hourBranchIdx = Math.floor((h + 1) / 2) % 12
-      const hourStemBase = (dayStemIdx % 5) * 2
-      const hourStem = tianGan[(hourStemBase + hourBranchIdx) % 10]
-      const hourBranch = diZhi[hourBranchIdx]
 
-      const counts: Record<string, number> = { 木:0, 火:0, 土:0, 金:0, 水:0 }
-      const addStem = (s?: string) => { if (s && stemEl[s]) counts[stemEl[s]] += 5 }
-      const addBranch = (b?: string) => {
-        if (!b) return
-        for (const {stem, weight} of branchHidden[b] ?? []) {
-          if (stemEl[stem]) counts[stemEl[stem]] += weight
-        }
-      }
-      addStem(yearStem); addBranch(yearBranch)
-      addStem(monthStem); addBranch(monthBranch)
-      addStem(dayStem); addBranch(dayBranch)
-      addStem(hourStem); addBranch(hourBranch)
-      const total = Math.max(1, Object.values(counts).reduce((a,b) => a+b, 0))
-      return (['木','火','土','金','水'] as const).map(el => ({
-        element: el,
-        percent: Math.round(counts[el] / total * 1000) / 10,
-      }))
+      const result = calcBazi(birthInput, calendarType)
+      const pillars = [result.pillars.year, result.pillars.month, result.pillars.day, result.pillars.hour]
+      const elements = result.elements.map((e) => ({ element: e.element, percent: e.percent }))
+      return { pillars, elements }
     } catch {
-      return null
+      return { pillars: null, elements: null }
     }
   }
 
@@ -446,11 +372,12 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
     // 有任何一条消息未被管理员读取过，则算未读
     const unread = msgs.filter((m) => !m.admin_read_at).length
     const reading = latestReadingMap.get(uid)
+    const bazi = reading ? extractBazi(reading.input_data) : null
     const userSnap: AdminSessionUserSnap | null = reading ? {
       name: (reading.name as string | undefined) ?? null,
       birth_date: (reading.birth_date as string | undefined) ?? null,
-      elements: extractElements(reading.input_data),
-      pillars: extractPillars(reading.input_data),
+      elements: bazi?.elements ?? null,
+      pillars: bazi?.pillars ?? null,
       balance: pointsMap.get(uid) ?? 0,
       readingCount: readingCountMap.get(uid) ?? 0,
     } : null
