@@ -42,9 +42,9 @@ export default function OverviewPage() {
 
       {/* 近 7 天图表 */}
       <div className="rounded-2xl border border-white/[0.07] bg-[#111] p-5">
-        <h2 className="mb-4 text-sm font-medium text-slate-300">近 7 天测算活跃（按日）</h2>
+        <h2 className="mb-6 text-sm font-medium text-slate-300">近 7 天测算活跃（按日）</h2>
         {/* 固定高度容器，用绝对定位让柱子从底部生长 */}
-        <div className="flex items-end gap-2" style={{ height: 120 }}>
+        <div className="flex items-end gap-3" style={{ height: 120 }}>
           {stats.dailyRegistrations.map((d) => {
             const BAR_MAX = 100  // 柱子最大高度 px
             const barH = maxCount > 0 ? Math.max(Math.round((d.count / maxCount) * BAR_MAX), d.count > 0 ? 6 : 2) : 2
@@ -53,8 +53,8 @@ export default function OverviewPage() {
               <div key={d.date} className="flex flex-1 flex-col items-center gap-1.5">
                 <span className="text-[10px] text-slate-500">{d.count > 0 ? d.count : ''}</span>
                 <div
-                  className={`w-full rounded-t-md transition-all ${d.count > 0 ? 'bg-amber-400/70' : 'bg-white/[0.05]'}`}
-                  style={{ height: barH }}
+                  className={`rounded-t-sm transition-all ${d.count > 0 ? 'bg-amber-400/70' : 'bg-white/[0.05]'}`}
+                  style={{ height: barH, width: '40%' }}
                 />
                 <span className="text-[10px] text-slate-500">{label}</span>
               </div>
