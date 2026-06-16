@@ -326,6 +326,41 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
     if (!latestReadingMap.has(r.user_id)) latestReadingMap.set(r.user_id, r)
   }
 
+  /** 从 input_data 提取四柱八字 */
+  function extractPillars(inputData: unknown): string[] | null {
+    try {
+      if (!inputData || typeof inputData !== 'object') return null
+      const data = inputData as Record<string, unknown>
+      const birth = (data.birth as Record<string, number> | undefined) ??
+        ((data.personA as Record<string, unknown> | undefined)?.birth as Record<string, number> | undefined)
+      if (!birth?.year) return null
+      const tianGan = ['甲','乙','丙','丁','戊','己','庚','辛','壬','癸']
+      const diZhi = ['子','丑','寅','卯','辰','巳','午','未','申','酉','戌','亥']
+      const y = Number(birth.year), m = Number(birth.month ?? 1), d = Number(birth.day ?? 1), h = Number(birth.hour ?? 0)
+      const yearStem = tianGan[(y - 4) % 10]
+      const yearBranch = diZhi[(y - 4) % 12]
+      const monthBranchIdx = ((m - 1) + 2) % 12
+      const monthStemBase = (((y - 4) % 5) * 2) % 10
+      const monthStem = tianGan[(monthStemBase + (m - 1)) % 10]
+      const monthBranch = diZhi[monthBranchIdx]
+      const julianDay = Math.floor(365.25 * (y + 4716)) + Math.floor(30.6001 * (m + 1)) + d - 1524
+      const dayStemIdx = (julianDay + 9) % 10
+      const dayBranchIdx = (julianDay + 11) % 12
+      const dayStem = tianGan[dayStemIdx]
+      const dayBranch = diZhi[dayBranchIdx]
+      const hourBranchIdx = Math.floor((h + 1) / 2) % 12
+      const hourStemBase = (dayStemIdx % 5) * 2
+      const hourStem = tianGan[(hourStemBase + hourBranchIdx) % 10]
+      const hourBranch = diZhi[hourBranchIdx]
+      return [
+        yearStem + yearBranch,
+        monthStem + monthBranch,
+        dayStem + dayBranch,
+        hourStem + hourBranch,
+      ]
+    } catch { return null }
+  }
+
   /** 从 input_data 里用纯 JS 计算五行占比（不依赖 bazi.ts，避免循环依赖） */
   function extractElements(inputData: unknown): { element: string; percent: number }[] | null {
     try {
@@ -415,7 +450,7 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
       name: (reading.name as string | undefined) ?? null,
       birth_date: (reading.birth_date as string | undefined) ?? null,
       elements: extractElements(reading.input_data),
-      pillars: null,
+      pillars: extractPillars(reading.input_data),
       balance: pointsMap.get(uid) ?? 0,
       readingCount: readingCountMap.get(uid) ?? 0,
     } : null

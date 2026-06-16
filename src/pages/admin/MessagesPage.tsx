@@ -84,6 +84,22 @@ function UserSnapPanel({
             </div>
           </div>
 
+          {/* 四柱八字 */}
+          {snap.pillars && snap.pillars.length === 4 && (
+            <div className="rounded-2xl border border-white/[0.07] bg-[#111] p-3 space-y-2">
+              <div className="text-[10px] font-medium text-slate-500 uppercase tracking-wide">四柱八字</div>
+              <div className="grid grid-cols-4 gap-1 text-center">
+                {['年柱','月柱','日柱','时柱'].map((label, i) => (
+                  <div key={label} className="space-y-1">
+                    <div className="text-[9px] text-slate-600">{label}</div>
+                    <div className="text-[13px] font-bold text-amber-200 font-mono tracking-wider">{snap.pillars![i][0]}</div>
+                    <div className="text-[13px] font-bold text-slate-300 font-mono tracking-wider">{snap.pillars![i][1]}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
           {/* 五行能量占比 */}
           {snap.elements && snap.elements.length > 0 && (
             <div className="rounded-2xl border border-white/[0.07] bg-[#111] p-3 space-y-2.5">
@@ -302,15 +318,26 @@ export default function MessagesPage() {
                 👤
               </button>
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 flex-wrap">
                   <div className="text-sm font-medium text-slate-200 truncate">{selected.user_email}</div>
                   {selected.userSnap?.name && (
                     <span className="shrink-0 rounded-full bg-amber-400/15 px-2 py-0.5 text-[10px] text-amber-300">
                       {selected.userSnap.name}
                     </span>
                   )}
+                  {/* 八字四柱 */}
+                  {selected.userSnap?.pillars && (
+                    <span className="shrink-0 font-mono text-[11px] text-slate-400 tracking-wider">
+                      {selected.userSnap.pillars.join(' ')}
+                    </span>
+                  )}
                 </div>
-                <div className="text-[11px] text-slate-500">{selected.messages.length} 条消息</div>
+                <div className="flex items-center gap-3 mt-0.5">
+                  <span className="text-[11px] text-slate-500">{selected.messages.length} 条消息</span>
+                  {selected.userSnap?.birth_date && (
+                    <span className="text-[11px] text-slate-600">生日 {selected.userSnap.birth_date}</span>
+                  )}
+                </div>
               </div>
               {selected.user_id && (
                 <button
