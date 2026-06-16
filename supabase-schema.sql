@@ -48,38 +48,38 @@ create policy "任何人可插入咨询消息"
 -- support_messages：管理员可读写所有消息（含回复）
 create policy "管理员可读所有消息"
   on support_messages for select
-  using (auth.email() = any(string_to_array(current_setting('app.admin_emails', true), ',')));
+  using (auth.email() = 'rolin9010@foxmail.com');
 
 create policy "管理员可插入消息"
   on support_messages for insert
-  with check (auth.email() = any(string_to_array(current_setting('app.admin_emails', true), ',')));
+  with check (auth.email() = 'rolin9010@foxmail.com');
 
 create policy "管理员可更新回复"
   on support_messages for update
-  using (auth.email() = any(string_to_array(current_setting('app.admin_emails', true), ',')));
+  using (auth.email() = 'rolin9010@foxmail.com');
 
 -- readings：管理员可读所有用户的测算记录
 create policy "管理员可读所有测算记录"
   on readings for select
-  using (auth.email() = any(string_to_array(current_setting('app.admin_emails', true), ',')));
+  using (auth.email() = 'rolin9010@foxmail.com');
 
 -- user_points：管理员可读写所有用户积分
 create policy "管理员可读所有用户积分"
   on user_points for select
-  using (auth.email() = any(string_to_array(current_setting('app.admin_emails', true), ',')));
+  using (auth.email() = 'rolin9010@foxmail.com');
 
 create policy "管理员可更新用户积分"
   on user_points for update
-  using (auth.email() = any(string_to_array(current_setting('app.admin_emails', true), ',')));
+  using (auth.email() = 'rolin9010@foxmail.com');
 
 -- points_records：管理员可读写所有积分流水
 create policy "管理员可读所有积分记录"
   on points_records for select
-  using (auth.email() = any(string_to_array(current_setting('app.admin_emails', true), ',')));
+  using (auth.email() = 'rolin9010@foxmail.com');
 
 create policy "管理员可插入积分记录"
   on points_records for insert
-  with check (auth.email() = any(string_to_array(current_setting('app.admin_emails', true), ',')));
+  with check (auth.email() = 'rolin9010@foxmail.com');
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 积分系统（user_points / points_records / invites）
