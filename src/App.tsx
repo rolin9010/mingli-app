@@ -317,26 +317,28 @@ function WizardApp({ user }: { user: User | null }) {
   // 检测是否从微信小程序 WebView 打开（隐藏顶部导航栏）
   const isMiniprogram = new URLSearchParams(window.location.search).get('miniprogram') === '1'
 
-  // 小程序模式：修复 background-attachment:fixed、0.5px 边框、左边 padding 问题
+  // 小程序模式：修复各种 WebView 兼容问题
   useEffect(() => {
     if (!isMiniprogram) return
+    // 去掉复杂星空背景（WebView 渲染会导致 overflow 计算异常、左边 padding 丢失）
     document.documentElement.style.setProperty('--bg-attachment', 'scroll')
     const style = document.createElement('style')
     style.textContent = `
       .border:not(.border-0){border-width:1px!important}
-      #root { padding-left: env(safe-area-inset-left, 0px); }
-      .mx-auto { margin-left: auto !important; margin-right: auto !important; }
-      body { overflow-x: hidden; width: 100vw; }
+      html, body {
+        overflow-x: hidden !important;
+        width: 100% !important;
+        max-width: 100% !important;
+        background-image: none !important;
+        background-attachment: scroll !important;
+      }
+      #root {
+        width: 100% !important;
+        overflow-x: hidden !important;
+        box-sizing: border-box !important;
+      }
     `
     document.head.appendChild(style)
-    // 强制 root 宽度正确
-    const root = document.getElementById('root')
-    if (root) {
-      root.style.width = '100%'
-      root.style.maxWidth = '100vw'
-      root.style.overflowX = 'hidden'
-      root.style.boxSizing = 'border-box'
-    }
   }, [isMiniprogram])
 
   useEffect(() => {
