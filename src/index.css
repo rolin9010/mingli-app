@@ -34,7 +34,8 @@ body {
   color: #e5e7eb;
   /* 纯深色底 + 繁星：2～3px 光点 + 高密度，1px 在高分屏上几乎看不见 */
   background-color: #050509;
-  background-attachment: fixed;
+  /* 微信 WebView 不支持 background-attachment: fixed，降级为 scroll */
+  background-attachment: var(--bg-attachment, fixed);
   background-image:
     radial-gradient(2px 2px at 3% 8%, rgba(255, 255, 255, 0.9), transparent),
     radial-gradient(2px 2px at 11% 22%, rgba(255, 255, 255, 0.45), transparent),

@@ -317,6 +317,16 @@ function WizardApp({ user }: { user: User | null }) {
   // 检测是否从微信小程序 WebView 打开（隐藏顶部导航栏）
   const isMiniprogram = new URLSearchParams(window.location.search).get('miniprogram') === '1'
 
+  // 小程序模式：修复 background-attachment:fixed 和 0.5px 边框问题
+  useEffect(() => {
+    if (!isMiniprogram) return
+    document.documentElement.style.setProperty('--bg-attachment', 'scroll')
+    // 修复 0.5px 边框在微信 WebView 里消失的问题
+    const style = document.createElement('style')
+    style.textContent = `.border:not(.border-0){border-width:1px!important}`
+    document.head.appendChild(style)
+  }, [isMiniprogram])
+
   useEffect(() => {
     if (step === 2 && input && results) {
       saveWizardSnapshot(2, input, results)

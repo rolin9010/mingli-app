@@ -5,7 +5,7 @@ import {
   type AdminUserDetail,
   type AdminReading,
 } from '../../lib/admin'
-import type { UserInput, HeBanUserInput } from '../../lib/types'
+import type { UserInput, HeBanUserInput, ReportResults, HeBanResults } from '../../lib/types'
 import { isHeBanInputData } from '../../lib/history'
 import {
   AI_READING_SERIF,
@@ -13,6 +13,8 @@ import {
   AiReportMarkdown,
   normalizeAiReportMarkdown,
 } from '../../lib/aiReportMarkdown'
+import { computeAll } from '../../lib/mingli/computeReport'
+import { Step2ChartsSection } from '../Step2Results'
 
 // ─── 工具 ─────────────────────────────────────────────────────────────────────
 
@@ -22,13 +24,96 @@ function formatDate(iso: string) {
   return `${d.getFullYear()}/${d.getMonth() + 1}/${d.getDate()}`
 }
 
-function BirthInfo({ input }: { input: UserInput }) {
-  const b = input.birth
+// ─── 单条测算展开内容（懒计算排盘） ──────────────────────────────────────────
+
+function ReadingExpandedContent({
+  r,
+  onViewFullReport,
+}: {
+  r: AdminReading
+  onViewFullReport: (r: AdminReading) => void
+}) {
+  const inputData = r.input_data as UserInput | HeBanUserInput | null
+  const isHeBan = isHeBanInputData(inputData ?? null)
+
+  const [results, setResults] = useState<ReportResults | null>(null)
+  const [heBanResults, setHeBanResults] = useState<HeBanResults | null>(null)
+  const [computing, setComputing] = useState(false)
+  const [computeErr, setComputeErr] = useState('')
+
+  useEffect(() => {
+    if (!inputData) return
+    setComputing(true)
+    setComputeErr('')
+    try {
+      if (isHeBan) {
+        const hbi = inputData as HeBanUserInput
+        setHeBanResults({ resultA: computeAll(hbi.personA), resultB: computeAll(hbi.personB) })
+      } else {
+        setResults(computeAll(inputData as UserInput))
+      }
+    } catch (e) {
+      setComputeErr(e instanceof Error ? e.message : '排盘失败')
+    } finally {
+      setComputing(false)
+    }
+  }, []) // 只算一次
+
   return (
-    <span>
-      {input.name} · {b.year}/{b.month}/{b.day} {b.hour}时 · {input.gender}
-      {input.bloodType ? ` · ${input.bloodType}型` : ''}
-    </span>
+    <div className="border-t border-white/[0.06] px-4 py-4 space-y-4">
+      {/* 排盘内容 */}
+      {computing && <p className="text-xs text-slate-500">排盘计算中…</p>}
+      {computeErr && <p className="text-xs text-rose-400">{computeErr}</p>}
+
+      {/* 单人 */}
+      {!isHeBan && !computing && !computeErr && inputData && results && (
+        <Step2ChartsSection input={inputData as UserInput} results={results} />
+      )}
+
+      {/* 合盘 */}
+      {isHeBan && !computing && !computeErr && inputData && heBanResults && (
+        <div className="space-y-6">
+          <div>
+            <div className="mb-2 text-[11px] font-medium text-amber-300/80">
+              甲方 · {(inputData as HeBanUserInput).personA.name}
+            </div>
+            <Step2ChartsSection
+              input={(inputData as HeBanUserInput).personA}
+              results={heBanResults.resultA}
+            />
+          </div>
+          <div>
+            <div className="mb-2 text-[11px] font-medium text-amber-300/80">
+              乙方 · {(inputData as HeBanUserInput).personB.name}
+              {' · 关系：'}{(inputData as HeBanUserInput).relation}
+            </div>
+            <Step2ChartsSection
+              input={(inputData as HeBanUserInput).personB}
+              results={heBanResults.resultB}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* AI 解读预览 */}
+      {r.ai_report && (
+        <div className="rounded-xl bg-white/[0.03] p-3">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-medium text-slate-400">AI 解读</span>
+            <button
+              type="button"
+              onClick={() => onViewFullReport(r)}
+              className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-300 hover:bg-amber-400/20 transition-colors"
+            >
+              查看全文 ↗
+            </button>
+          </div>
+          <div className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap line-clamp-10">
+            {r.ai_report.slice(0, 300)}{r.ai_report.length > 300 ? '…' : ''}
+          </div>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -174,49 +259,17 @@ export default function UserDetailPanel({ userId, onBack }: { userId: string; on
                       <div className="mt-0.5 text-[11px] text-slate-500">
                         {formatDate(r.created_at)}
                         {r.ai_report ? ' · 有AI解读' : ' · 无AI解读'}
-                        {inputData && isHeBanInputData(inputData) ? ' · 合盘' : ''}
+                        {inputData && isHeBanInputData(inputData) ? ` · 合盘（${(inputData as HeBanUserInput).relation}）` : ''}
                       </div>
                     </div>
                     <svg className={`h-3.5 w-3.5 text-slate-500 transition-transform ${isExpanded ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M6 9l6 6 6-6"/></svg>
                   </button>
 
                   {isExpanded && (
-                    <div className="border-t border-white/[0.06] px-4 py-4 space-y-3">
-                      {inputData && (
-                        <div className="rounded-xl bg-white/[0.03] p-3">
-                          <div className="mb-1.5 text-[11px] font-medium text-slate-400">输入信息</div>
-                          <div className="text-xs text-slate-300 leading-relaxed">
-                            {isHeBanInputData(inputData) ? (
-                              <div className="space-y-1">
-                                <div>甲：<BirthInfo input={inputData.personA} /></div>
-                                <div>乙：<BirthInfo input={inputData.personB} /></div>
-                                <div>关系：{inputData.relation}</div>
-                              </div>
-                            ) : (
-                              <BirthInfo input={inputData as UserInput} />
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {r.ai_report && (
-                        <div className="rounded-xl bg-white/[0.03] p-3">
-                          <div className="mb-2 flex items-center justify-between">
-                            <span className="text-[11px] font-medium text-slate-400">AI 解读</span>
-                            <button
-                              type="button"
-                              onClick={() => setFullscreenReading(r)}
-                              className="rounded-lg border border-amber-400/25 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-300 hover:bg-amber-400/20 transition-colors"
-                            >
-                              查看全文 ↗
-                            </button>
-                          </div>
-                          <div className="text-xs text-slate-400 leading-relaxed whitespace-pre-wrap line-clamp-10">
-                            {r.ai_report.slice(0, 300)}{r.ai_report.length > 300 ? '…' : ''}
-                          </div>
-                        </div>
-                      )}
-                    </div>
+                    <ReadingExpandedContent
+                      r={r}
+                      onViewFullReport={setFullscreenReading}
+                    />
                   )}
                 </div>
               )
