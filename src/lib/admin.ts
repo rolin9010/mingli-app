@@ -462,11 +462,12 @@ export async function adminGetStats(): Promise<AdminStats> {
   const sevenDaysAgo = days[0] + 'T00:00:00.000Z'
 
   const [pendingRes, pointsRes, readingsCountRes, todayReadingsRes] = await Promise.all([
-    // 待回复消息数
+    // 待回复消息数（按用户维度：有未回复消息的用户数，排除管理员主动发送的占位符行）
     supabase
       .from('support_messages')
-      .select('id', { count: 'exact', head: true })
-      .is('reply', null),
+      .select('user_id')
+      .is('reply', null)
+      .neq('content', '__admin_proactive__'),
     // 今日积分消耗
     supabase
       .from('points_records')
@@ -515,7 +516,8 @@ export async function adminGetStats(): Promise<AdminStats> {
     totalUsers: totalUsers ?? 0,
     todayRegistered: todayReadingsRes.count ?? 0,
     todayPointsConsumed: todayConsumed,
-    pendingMessages: pendingRes.count ?? 0,
+    // 按用户维度去重：有未回复消息的用户数
+    pendingMessages: new Set((pendingRes.data ?? []).map((r) => (r as { user_id: string }).user_id).filter(Boolean)).size,
     dailyRegistrations: days.map((d) => ({
       date: d,
       count: dayCountMap.get(d)?.size ?? 0,
