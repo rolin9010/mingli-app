@@ -11,9 +11,21 @@ export default defineConfig({
       additionalLegacyPolyfills: ['regenerator-runtime/runtime'],
       renderLegacyChunks: true,
     }),
+    // 微信 WebView 兼容：去掉 HTML 里所有 crossorigin 属性
+    // 微信内核对 crossorigin 处理有 bug，会导致 CSS/JS 加载失败
+    // enforce: 'post' 确保在 legacy 插件注入完 nomodule 脚本之后再处理
+    {
+      name: 'remove-crossorigin',
+      enforce: 'post' as const,
+      apply: 'build' as const,
+      transformIndexHtml(html: string) {
+        return html.replace(/\s+crossorigin(?:="[^"]*")?/g, '')
+      },
+    },
   ],
   build: {
-    /** lunar-javascript 体积大，单独成包便于缓存与并行加载 */
+    /** 去掉 crossorigin 属性——微信 WebView 对 crossorigin 处理有 bug 会导致 CSS 加载失败 */
+    cssCodeSplit: false,
     rollupOptions: {
       output: {
         manualChunks(id) {
