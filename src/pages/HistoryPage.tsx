@@ -408,6 +408,9 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
             ) : (
               <div className="flex items-center gap-2">
                 <span className="text-base font-semibold text-amber-100/95">{detail.name ?? '—'}</span>
+                {selectedId === primaryId && !isHeBan && (
+                  <span className="shrink-0 rounded-full bg-amber-400/20 px-2 py-0.5 text-xs font-medium text-amber-300">★ 我的五行</span>
+                )}
                 {isHeBan && (
                   <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-xs text-amber-300">合盘</span>
                 )}
@@ -622,7 +625,7 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
                         <span className="font-medium text-amber-100/95 leading-snug truncate">{row.name ?? '未命名'}</span>
                         {isPrimary && (
                           <span className="shrink-0 rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300 leading-none">
-                            ★ 我的八字
+                            ★ 我的五行
                           </span>
                         )}
                         {row.ai_report ? (
@@ -661,10 +664,10 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
 
                   {/* 右侧操作列 */}
                   <div className="flex flex-col gap-1 py-2 pr-2">
-                    {/* 设为我的八字 */}
+                    {/* 设为我的五行 */}
                     <button
                       type="button"
-                      title={isPrimary ? '已是我的八字' : '设为我的八字'}
+                      title={isPrimary ? '已是我的五行' : '设为我的五行'}
                       disabled={primaryLoading || isPrimary}
                       onClick={() => void handleSetPrimary(row.id)}
                       className={`rounded-lg border px-2 py-1.5 text-[11px] font-medium transition ${
