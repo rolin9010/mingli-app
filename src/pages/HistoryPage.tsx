@@ -253,6 +253,12 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
     return normalizeAiReportMarkdown(raw)
   }, [detail?.ai_report])
 
+  // 仅保留个人档案（过滤合盘）—— 必须在 if (selectedId) return 之前调用，确保 Hook 顺序稳定
+  const personalList = useMemo(
+    () => (list ?? []).filter((row) => !isHeBanInputData(row.input_data ?? null)),
+    [list],
+  )
+
   // ── 设为主档案 ──
   const handleSetPrimary = async (id: string) => {
     setPrimaryLoading(true)
@@ -513,11 +519,6 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
   }
 
   // ── 列表页 ──
-  // 仅保留个人档案（过滤合盘）
-  const personalList = useMemo(
-    () => (list ?? []).filter((row) => !isHeBanInputData(row.input_data ?? null)),
-    [list],
-  )
 
   return (
     <div className="mx-auto max-w-xl px-4 pb-16 pt-8">
