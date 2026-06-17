@@ -13,6 +13,7 @@ import {
   isHeBanInputData,
   setPrimaryReading,
   updateReadingName,
+  type BaziSummary,
   type ReadingDetail,
   type ReadingListItem,
 } from '../lib/history'
@@ -228,7 +229,22 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
   const handleSetPrimary = async (id: string) => {
     setPrimaryLoading(true)
     try {
-      await setPrimaryReading(id)
+      // 找到这条记录的 input_data，计算 baziSummary
+      const row = list?.find(r => r.id === id)
+      let baziSummary: BaziSummary | undefined
+      if (row?.input_data && !isHeBanInputData(row.input_data)) {
+        try {
+          const bazi = calcBazi((row.input_data as UserInput).birth, (row.input_data as UserInput).calendarType ?? '公历')
+          const fullResult = computeAll(row.input_data as UserInput)
+          baziSummary = {
+            pillars: bazi.pillars,
+            elements: fullResult.bazi.elements.map(e => ({ element: e.element, percent: e.percent })),
+          }
+        } catch {
+          // 计算失败不影响主流程
+        }
+      }
+      await setPrimaryReading(id, baziSummary)
       setPrimaryId(id)
     } catch (e: unknown) {
       alert(e instanceof Error ? e.message : '操作失败')

@@ -116,8 +116,14 @@ export async function updateReadingName(id: string, name: string): Promise<void>
   if (error) throw error
 }
 
+/** 五行能量摘要类型（供小程序展示用） */
+export type BaziSummary = {
+  pillars: { year: string; month: string; day: string; hour: string }
+  elements: { element: string; percent: number }[]
+}
+
 /** 设置某条记录为「我的八字」（同时清除同用户其他记录的 is_primary） */
-export async function setPrimaryReading(id: string): Promise<void> {
+export async function setPrimaryReading(id: string, baziSummary?: BaziSummary): Promise<void> {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) throw new Error('未登录')
 
@@ -129,10 +135,13 @@ export async function setPrimaryReading(id: string): Promise<void> {
     .eq('is_primary', true)
   if (clearErr) throw clearErr
 
-  // 再设置目标记录
+  // 再设置目标记录（附带 bazi_summary）
+  const updatePayload: Record<string, unknown> = { is_primary: true }
+  if (baziSummary) updatePayload.bazi_summary = baziSummary
+
   const { error } = await supabase
     .from('readings')
-    .update({ is_primary: true })
+    .update(updatePayload)
     .eq('id', id)
     .eq('user_id', user.id)
   if (error) throw error
