@@ -152,7 +152,9 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
           setNameInput(row.name ?? '')
         }
       } catch (e: unknown) {
-        if (!cancelled) setDetailError(e instanceof Error ? e.message : '加载失败')
+        const msg = e instanceof Error ? e.message : JSON.stringify(e)
+        console.error('[getReading] 详情加载失败:', e)
+        if (!cancelled) setDetailError(msg || '加载失败，请刷新重试')
       } finally {
         if (!cancelled) setDetailLoading(false)
       }
@@ -333,6 +335,15 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
             </button>
           )}
         </div>
+
+        {/* 加载中 / 错误状态 */}
+        {detailLoading && <p className="mb-4 text-sm text-slate-400">加载中…</p>}
+        {detailError && (
+          <div className="mb-4 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3">
+            <p className="text-sm font-medium text-rose-300">加载失败</p>
+            <p className="mt-1 text-xs text-rose-400/80 break-all">{detailError}</p>
+          </div>
+        )}
 
         {/* 标题 / 名称编辑区 */}
         {detail && !detailLoading ? (
