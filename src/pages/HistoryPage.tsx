@@ -7,9 +7,11 @@ import {
 } from '../lib/aiReportMarkdown'
 import {
   deleteReading,
+  generateBindingCode,
   getReading,
   getReadings,
   isHeBanInputData,
+  setPrimaryReading,
   updateReadingName,
   type ReadingDetail,
   type ReadingListItem,
@@ -64,6 +66,19 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
 
+  // 设为主档案相关状态
+  const [primaryId, setPrimaryId] = useState<string | null>(() => {
+    // 从列表里找出已标记的（初始为 null，等列表加载完再同步）
+    return null
+  })
+  const [primaryLoading, setPrimaryLoading] = useState(false)
+
+  // 绑定码相关状态
+  const [bindingCode, setBindingCode] = useState<string | null>(null)
+  const [bindingCodeExpiry, setBindingCodeExpiry] = useState<Date | null>(null)
+  const [bindingCodeLoading, setBindingCodeLoading] = useState(false)
+  const [showBindingPanel, setShowBindingPanel] = useState(false)
+
   // 删除相关状态
   const [deletingId, setDeletingId] = useState<string | null>(null)   // 正在确认删除的 id
   const [deleteLoading, setDeleteLoading] = useState(false)
@@ -103,7 +118,12 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
     void (async () => {
       try {
         const rows = await getReadings()
-        if (!cancelled) setList(rows)
+        if (!cancelled) {
+          setList(rows)
+          // 找出已标记的主档案
+          const primary = (rows as (ReadingListItem & { is_primary?: boolean })[]).find(r => r.is_primary)
+          if (primary) setPrimaryId(primary.id)
+        }
       } catch (e: unknown) {
         if (!cancelled) setListError(e instanceof Error ? e.message : '加载失败')
       } finally {
@@ -203,6 +223,33 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
     const raw = detail?.ai_report ?? ''
     return normalizeAiReportMarkdown(raw)
   }, [detail?.ai_report])
+
+  // ── 设为主档案 ──
+  const handleSetPrimary = async (id: string) => {
+    setPrimaryLoading(true)
+    try {
+      await setPrimaryReading(id)
+      setPrimaryId(id)
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '操作失败')
+    } finally {
+      setPrimaryLoading(false)
+    }
+  }
+
+  // ── 生成绑定码 ──
+  const handleGenerateCode = async () => {
+    setBindingCodeLoading(true)
+    try {
+      const code = await generateBindingCode()
+      setBindingCode(code)
+      setBindingCodeExpiry(new Date(Date.now() + 10 * 60 * 1000))
+    } catch (e: unknown) {
+      alert(e instanceof Error ? e.message : '生成失败')
+    } finally {
+      setBindingCodeLoading(false)
+    }
+  }
 
   // ── 删除处理 ──
   const handleDelete = async (id: string) => {
@@ -430,6 +477,63 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
       </button>
       <h2 className="mb-6 text-lg font-semibold tracking-wide text-amber-100">历史档案</h2>
 
+      {/* 绑定小程序入口 */}
+      <div className="mb-5">
+        <button
+          type="button"
+          onClick={() => setShowBindingPanel(v => !v)}
+          className="flex w-full items-center justify-between rounded-xl border border-amber-400/20 bg-amber-400/5 px-4 py-3 text-left transition hover:border-amber-400/35 hover:bg-amber-400/8"
+        >
+          <div className="flex items-center gap-2">
+            <span className="text-base">📱</span>
+            <div>
+              <div className="text-sm font-medium text-amber-100">绑定松眠小程序</div>
+              <div className="text-xs text-slate-400 mt-0.5">生成绑定码，在小程序中输入即可同步你的八字</div>
+            </div>
+          </div>
+          <span className="text-slate-500 text-xs">{showBindingPanel ? '▲' : '▼'}</span>
+        </button>
+
+        {showBindingPanel && (
+          <div className="mt-2 rounded-xl border border-white/10 bg-white/[0.03] px-4 py-4">
+            {bindingCode && bindingCodeExpiry ? (
+              <div className="text-center">
+                <p className="mb-1 text-xs text-slate-400">在松眠小程序「绑定账号」页面输入以下验证码</p>
+                <div className="my-3 font-mono text-4xl font-bold tracking-[0.3em] text-amber-300">
+                  {bindingCode}
+                </div>
+                <p className="text-xs text-slate-500">
+                  {new Date() < bindingCodeExpiry
+                    ? `有效至 ${bindingCodeExpiry.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
+                    : '已过期，请重新生成'
+                  }
+                </p>
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateCode()}
+                  disabled={bindingCodeLoading}
+                  className="mt-3 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-slate-400 hover:text-slate-200 disabled:opacity-50"
+                >
+                  重新生成
+                </button>
+              </div>
+            ) : (
+              <div className="text-center">
+                <p className="mb-3 text-xs text-slate-400">点击生成一个 10 分钟有效的绑定码</p>
+                <button
+                  type="button"
+                  onClick={() => void handleGenerateCode()}
+                  disabled={bindingCodeLoading}
+                  className="rounded-xl border border-amber-400/50 bg-amber-400/15 px-6 py-2.5 text-sm font-semibold text-amber-100 hover:bg-amber-400/25 disabled:opacity-50"
+                >
+                  {bindingCodeLoading ? '生成中…' : '生成绑定码'}
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+
       {loading ? (
         <p className="text-sm text-slate-400">加载中…</p>
       ) : listError ? (
@@ -439,67 +543,95 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
       ) : (
         <ul className="space-y-3">
           {personalList.map((row) => {
+            const isPrimary = row.id === primaryId
             const pillars = getPillarsFromInput(row)
             const birthLabel = getBirthLabel(row)
             const updatedAt = row.created_at
               ? new Date(row.created_at).toLocaleDateString('zh-CN', { year: 'numeric', month: '2-digit', day: '2-digit' })
               : '—'
             return (
-              <li key={row.id} className="flex items-stretch gap-2">
+              <li key={row.id} className="space-y-1.5">
                 {/* 主按钮 — 点击进入详情 */}
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(row.id)}
-                  className="flex-1 rounded-xl border border-amber-400/20 bg-white/[0.04] px-4 py-3 text-left transition-colors hover:border-amber-400/40 hover:bg-white/[0.06]"
-                >
-                  {/* 第一行：姓名 + 解读标签（左）+ 更新时间（右） */}
-                  <div className="mb-1.5 flex items-center justify-between gap-2">
-                    <div className="flex min-w-0 items-center gap-1.5">
-                      <span className="font-medium text-amber-100/95 leading-snug truncate">{row.name ?? '未命名'}</span>
-                      {row.ai_report ? (
-                        <span className="shrink-0 rounded-full bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300 leading-none">
-                          已解读
-                        </span>
-                      ) : (
-                        <span className="shrink-0 rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-slate-500 leading-none">
-                          未解读
-                        </span>
-                      )}
-                    </div>
-                    <span className="shrink-0 text-[11px] text-slate-500">{updatedAt}</span>
-                  </div>
-                  {/* 第二行：出生日期（左）+ 四柱（右） */}
-                  <div className="flex items-start justify-between gap-3">
-                    <span className="text-xs text-slate-400 leading-relaxed">{birthLabel}</span>
-                    {/* 右：四柱八字，每柱柱名→天干→地支竖排 */}
-                    {pillars ? (
-                      <div className="shrink-0 flex gap-2">
-                        {(['年', '月', '日', '时'] as const).map((label, i) => {
-                          const gz = pillars[i] ?? ''
-                          const stem = gz[0] ?? ''
-                          const branch = gz[1] ?? ''
-                          return (
-                            <div key={label} className="flex flex-col items-center gap-0.5">
-                              <span className="text-[10px] text-slate-500 leading-none">{label}</span>
-                              <span className="text-xs font-medium text-amber-200/90 leading-tight">{stem}</span>
-                              <span className="text-xs font-medium text-amber-200/70 leading-tight">{branch}</span>
-                            </div>
-                          )
-                        })}
+                <div className={`flex items-stretch gap-2 rounded-xl border transition-colors ${
+                  isPrimary
+                    ? 'border-amber-400/50 bg-amber-400/8'
+                    : 'border-amber-400/20 bg-white/[0.04] hover:border-amber-400/40 hover:bg-white/[0.06]'
+                }`}>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedId(row.id)}
+                    className="flex-1 px-4 py-3 text-left"
+                  >
+                    {/* 第一行：姓名 + 标签 + 时间 */}
+                    <div className="mb-1.5 flex items-center justify-between gap-2">
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <span className="font-medium text-amber-100/95 leading-snug truncate">{row.name ?? '未命名'}</span>
+                        {isPrimary && (
+                          <span className="shrink-0 rounded-full bg-amber-400/20 px-1.5 py-0.5 text-[10px] font-medium text-amber-300 leading-none">
+                            ★ 我的八字
+                          </span>
+                        )}
+                        {row.ai_report ? (
+                          <span className="shrink-0 rounded-full bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300 leading-none">
+                            已解读
+                          </span>
+                        ) : (
+                          <span className="shrink-0 rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-slate-500 leading-none">
+                            未解读
+                          </span>
+                        )}
                       </div>
-                    ) : null}
-                  </div>
-                </button>
+                      <span className="shrink-0 text-[11px] text-slate-500">{updatedAt}</span>
+                    </div>
+                    {/* 第二行：出生日期 + 四柱 */}
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="text-xs text-slate-400 leading-relaxed">{birthLabel}</span>
+                      {pillars ? (
+                        <div className="shrink-0 flex gap-2">
+                          {(['年', '月', '日', '时'] as const).map((label, i) => {
+                            const gz = pillars[i] ?? ''
+                            const stem = gz[0] ?? ''
+                            const branch = gz[1] ?? ''
+                            return (
+                              <div key={label} className="flex flex-col items-center gap-0.5">
+                                <span className="text-[10px] text-slate-500 leading-none">{label}</span>
+                                <span className="text-xs font-medium text-amber-200/90 leading-tight">{stem}</span>
+                                <span className="text-xs font-medium text-amber-200/70 leading-tight">{branch}</span>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      ) : null}
+                    </div>
+                  </button>
 
-                {/* 删除按钮 */}
-                <button
-                  type="button"
-                  onClick={() => setDeletingId(row.id)}
-                  title="删除"
-                  className="shrink-0 rounded-xl border border-white/10 bg-white/[0.04] px-3 text-rose-400/70 transition hover:border-rose-400/30 hover:bg-rose-400/10 hover:text-rose-300"
-                >
-                  ✕
-                </button>
+                  {/* 右侧操作列 */}
+                  <div className="flex flex-col gap-1 py-2 pr-2">
+                    {/* 设为我的八字 */}
+                    <button
+                      type="button"
+                      title={isPrimary ? '已是我的八字' : '设为我的八字'}
+                      disabled={primaryLoading || isPrimary}
+                      onClick={() => void handleSetPrimary(row.id)}
+                      className={`rounded-lg border px-2 py-1.5 text-[11px] font-medium transition ${
+                        isPrimary
+                          ? 'border-amber-400/30 bg-amber-400/10 text-amber-300 cursor-default'
+                          : 'border-white/10 bg-white/[0.04] text-slate-400 hover:border-amber-400/40 hover:text-amber-200'
+                      } disabled:opacity-60`}
+                    >
+                      {isPrimary ? '★' : '☆'}
+                    </button>
+                    {/* 删除 */}
+                    <button
+                      type="button"
+                      onClick={() => setDeletingId(row.id)}
+                      title="删除"
+                      className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-[11px] text-rose-400/70 transition hover:border-rose-400/30 hover:bg-rose-400/10 hover:text-rose-300"
+                    >
+                      ✕
+                    </button>
+                  </div>
+                </div>
               </li>
             )
           })}

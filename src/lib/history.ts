@@ -83,7 +83,7 @@ export async function getReadings(): Promise<ReadingListItem[]> {
 
   const { data, error } = await supabase
     .from('readings')
-    .select('id, name, birth_date, created_at, input_data, ai_report')
+    .select('id, name, birth_date, created_at, input_data, ai_report, is_primary')
     .eq('user_id', user.id)
     .order('created_at', { ascending: false })
     .limit(20)
@@ -114,4 +114,65 @@ export async function deleteReading(id: string): Promise<void> {
 export async function updateReadingName(id: string, name: string): Promise<void> {
   const { error } = await supabase.from('readings').update({ name }).eq('id', id)
   if (error) throw error
+}
+
+/** 设置某条记录为「我的八字」（同时清除同用户其他记录的 is_primary） */
+export async function setPrimaryReading(id: string): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('未登录')
+
+  // 先清除本用户所有 is_primary
+  const { error: clearErr } = await supabase
+    .from('readings')
+    .update({ is_primary: false })
+    .eq('user_id', user.id)
+    .eq('is_primary', true)
+  if (clearErr) throw clearErr
+
+  // 再设置目标记录
+  const { error } = await supabase
+    .from('readings')
+    .update({ is_primary: true })
+    .eq('id', id)
+    .eq('user_id', user.id)
+  if (error) throw error
+}
+
+/** 获取当前用户「我的八字」记录（is_primary = true） */
+export async function getPrimaryReading(): Promise<ReadingListItem | null> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) return null
+
+  const { data, error } = await supabase
+    .from('readings')
+    .select('id, name, birth_date, created_at, input_data, ai_report, is_primary')
+    .eq('user_id', user.id)
+    .eq('is_primary', true)
+    .single()
+
+  if (error) return null
+  return data as ReadingListItem & { is_primary: boolean }
+}
+
+/** 生成 6 位绑定码（10 分钟有效期），存入 binding_codes 表 */
+export async function generateBindingCode(): Promise<string> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('未登录')
+
+  // 生成 6 位随机数字码
+  const code = String(Math.floor(100000 + Math.random() * 900000))
+  const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString()
+
+  // 先删除该用户旧的绑定码
+  await supabase.from('binding_codes').delete().eq('user_id', user.id)
+
+  // 插入新码
+  const { error } = await supabase.from('binding_codes').insert({
+    code,
+    user_id: user.id,
+    expires_at: expiresAt,
+  })
+  if (error) throw error
+
+  return code
 }
