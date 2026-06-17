@@ -95,9 +95,9 @@ export async function getReadings(): Promise<ReadingListItem[]> {
 /** 获取单条历史记录详情 */
 export async function getReading(id: string): Promise<ReadingDetail> {
   const { data: { user } } = await supabase.auth.getUser()
-  const query = supabase.from('readings').select('*').eq('id', id)
+  let query = supabase.from('readings').select('*').eq('id', id)
   // 非管理员（普通用户）加上 user_id 过滤，确保 RLS 通过
-  if (user) query.eq('user_id', user.id)
+  if (user) query = query.eq('user_id', user.id)
   const { data, error } = await query.single()
 
   if (error) throw error
