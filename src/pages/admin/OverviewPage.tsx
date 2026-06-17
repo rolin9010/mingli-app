@@ -56,13 +56,28 @@ export default function OverviewPage({ onTabChange, onBarClick }: Props) {
           label="总用户数" value={stats.totalUsers} icon="👥" color="text-slate-100"
           onClick={() => onTabChange('users')}
         />
-        <StatCard
-          label="今日活跃测算" value={stats.todayRegistered} icon="🔮" color="text-amber-300"
+        {/* 今日活跃测算 + 积分消耗合并卡片 */}
+        <div
           onClick={() => onBarClick(new Date().toISOString().slice(0, 10))}
-        />
-        <StatCard
-          label="今日积分消耗" value={stats.todayPointsConsumed} icon="💎" color="text-amber-400"
-        />
+          className="rounded-2xl border border-white/[0.07] bg-[#111] p-5 cursor-pointer hover:border-amber-400/30 hover:bg-white/[0.03] transition-colors col-span-2 lg:col-span-2"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <span className="text-xs text-slate-500">今日概况</span>
+            <span className="text-lg">🔮</span>
+          </div>
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <div className="text-3xl font-bold tabular-nums text-amber-300">{stats.todayRegistered}</div>
+              <div className="mt-1 text-[11px] text-slate-500">测算次数</div>
+            </div>
+            <div className="w-px self-stretch bg-white/[0.06]" />
+            <div className="text-right">
+              <div className="text-3xl font-bold tabular-nums text-amber-400">{stats.todayPointsConsumed}</div>
+              <div className="mt-1 text-[11px] text-slate-500">积分消耗</div>
+            </div>
+          </div>
+          <div className="mt-3 text-[10px] text-slate-600">点击查看今日明细 →</div>
+        </div>
         <StatCard
           label="待回复消息" value={stats.pendingMessages} icon="💬"
           color={stats.pendingMessages > 0 ? 'text-rose-400' : 'text-slate-100'}
