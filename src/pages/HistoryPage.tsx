@@ -105,6 +105,19 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
   const [bindingCodeExpiry, setBindingCodeExpiry] = useState<Date | null>(null)
   const [bindingCodeLoading, setBindingCodeLoading] = useState(false)
   const [showBindingPanel, setShowBindingPanel] = useState(false)
+  const [bindingCodeSecondsLeft, setBindingCodeSecondsLeft] = useState(0)
+
+  // 倒计时 effect
+  useEffect(() => {
+    if (!bindingCodeExpiry) { setBindingCodeSecondsLeft(0); return }
+    const update = () => {
+      const left = Math.max(0, Math.floor((bindingCodeExpiry.getTime() - Date.now()) / 1000))
+      setBindingCodeSecondsLeft(left)
+    }
+    update()
+    const timer = setInterval(update, 1000)
+    return () => clearInterval(timer)
+  }, [bindingCodeExpiry])
 
   // 删除相关状态
   const [deletingId, setDeletingId] = useState<string | null>(null)   // 正在确认删除的 id
@@ -560,8 +573,8 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
                   {bindingCode}
                 </div>
                 <p className="text-xs text-slate-500">
-                  {new Date() < bindingCodeExpiry
-                    ? `有效至 ${bindingCodeExpiry.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`
+                  {bindingCodeSecondsLeft > 0
+                    ? `${Math.floor(bindingCodeSecondsLeft / 60).toString().padStart(2, '0')}:${(bindingCodeSecondsLeft % 60).toString().padStart(2, '0')} 后过期`
                     : '已过期，请重新生成'
                   }
                 </p>

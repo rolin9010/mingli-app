@@ -4,6 +4,8 @@ import { hasBirthLocationForTrueSolar } from '../lib/geo'
 import Card from '../components/Card'
 import FormField from '../components/FormField'
 import { IconSparkle } from '../components/icons'
+import { getReadings, type ReadingListItem } from '../lib/history'
+import { supabase } from '../lib/supabase'
 
 /**
  * 可选排盘体系；与 Step2 `switch (sysKey)` 对齐。
@@ -245,6 +247,84 @@ function getDaysInMonth(y: number, m: number) {
   return new Date(y, m, 0).getDate()
 }
 
+// ── 历史档案选择弹窗 ─────────────────────────────────────────────
+function HistoryPickerModal({
+  onSelect,
+  onClose,
+}: {
+  onSelect: (item: ReadingListItem) => void
+  onClose: () => void
+}) {
+  const [list, setList] = useState<ReadingListItem[] | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [isLoggedIn, setIsLoggedIn] = useState<boolean | null>(null)
+  const ref = useRef<HTMLDivElement>(null)
+
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (ref.current && !ref.current.contains(e.target as Node)) onClose()
+    }
+    document.addEventListener('mousedown', handler)
+    return () => document.removeEventListener('mousedown', handler)
+  }, [onClose])
+
+  useEffect(() => {
+    void (async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) { setIsLoggedIn(false); setLoading(false); return }
+      setIsLoggedIn(true)
+      try {
+        const rows = await getReadings()
+        setList(rows)
+      } catch (e: unknown) {
+        setError(e instanceof Error ? e.message : '加载失败')
+      } finally {
+        setLoading(false)
+      }
+    })()
+  }, [])
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end justify-center bg-black/60 sm:items-center">
+      <div ref={ref} className="w-full max-w-sm rounded-t-2xl bg-slate-900 p-5 shadow-xl sm:rounded-2xl">
+        <div className="mb-4 flex items-center justify-between">
+          <span className="text-sm font-semibold text-amber-100">选择历史档案</span>
+          <button onClick={onClose} className="text-slate-400 hover:text-slate-200 text-lg leading-none">✕</button>
+        </div>
+        {isLoggedIn === false ? (
+          <p className="text-center text-sm text-slate-400 py-4">请先登录后才能使用历史档案功能</p>
+        ) : loading ? (
+          <p className="text-center text-sm text-slate-400 py-4">加载中…</p>
+        ) : error ? (
+          <p className="text-center text-sm text-rose-400 py-4">{error}</p>
+        ) : !list || list.length === 0 ? (
+          <p className="text-center text-sm text-slate-400 py-4">暂无历史记录</p>
+        ) : (
+          <ul className="max-h-64 space-y-2 overflow-y-auto">
+            {list.map((row) => (
+              <li key={row.id}>
+                <button
+                  type="button"
+                  onClick={() => { onSelect(row); onClose() }}
+                  className="w-full rounded-xl border border-amber-400/20 bg-white/[0.04] px-4 py-3 text-left transition hover:border-amber-400/40 hover:bg-white/[0.07]"
+                >
+                  <div className="font-medium text-amber-100/95 text-sm">{row.name ?? '未命名'}</div>
+                  <div className="mt-0.5 text-xs text-slate-400">
+                    出生：{row.birth_date ?? '—'}
+                    <span className="mx-2">·</span>
+                    {row.created_at ? new Date(row.created_at).toLocaleDateString() : '—'}
+                  </div>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
+  )
+}
+
 // ── 弹窗通用容器 ──────────────────────────────────────────────────
 function Modal({ title, onClose, children }: { title: string; onClose: () => void; children: React.ReactNode }) {
   const ref = useRef<HTMLDivElement>(null)
@@ -459,7 +539,7 @@ export default function Step1Input({
   isSubmitting = false,
   mode = 'single',
   onSwitchMode,
-}: {
+}: {  
   onNext: (data: UserInput) => void | Promise<void>
   initialValues?: UserInput | null
   /** 动态加载测算模块时禁用「下一步」避免重复提交 */
@@ -527,12 +607,11 @@ export default function Step1Input({
     setHasChosenMbtiDimensions(false)
   }, [mbtiSystemSelected])
 
-  const [showLastInputHint, setShowLastInputHint] = useState(false)
+  const [showHistoryPicker, setShowHistoryPicker] = useState(false)
 
   useEffect(() => {
     try {
       const saved = localStorage.getItem(LAST_INPUT_STORAGE_KEY)
-      setShowLastInputHint(!!saved)
       if (!saved) return
       const parsed = JSON.parse(saved) as Record<string, unknown>
 
@@ -659,7 +738,6 @@ export default function Step1Input({
     }
     try {
       localStorage.setItem(LAST_INPUT_STORAGE_KEY, JSON.stringify(payload))
-      setShowLastInputHint(true)
     } catch {
       /* quota / private mode */
     }
@@ -687,8 +765,31 @@ export default function Step1Input({
       setMbtiDimensions((d) => ({ ...d, [dim]: val }))
     })()
 
+  // 从历史档案填入
+  const applyFromHistory = (row: ReadingListItem) => {
+    try {
+      const d = row.input_data as Record<string, unknown> | null
+      if (!d) return
+      if (typeof d.name === 'string') setName(d.name)
+      const b = d.birth as BirthDateInput | undefined
+      if (b && isValidDate(b)) setBirth(b)
+      if (d.gender === '男' || d.gender === '女') setGender(d.gender)
+      if (d.calendarType === '公历' || d.calendarType === '农历') setCalendarType(d.calendarType)
+      if (typeof d.country === 'string') setCountry(d.country)
+      if (typeof d.province === 'string') setProvince(d.province)
+      if (typeof d.city === 'string') setCity(d.city)
+      if (typeof d.district === 'string') setDistrict(d.district)
+    } catch { /* ignore */ }
+  }
+
   return (
     <>
+      {showHistoryPicker && (
+        <HistoryPickerModal
+          onSelect={applyFromHistory}
+          onClose={() => setShowHistoryPicker(false)}
+        />
+      )}
       {showTimePicker && (
         <BirthTimePicker
           birth={birth}
@@ -755,7 +856,16 @@ export default function Step1Input({
             <Card
               icon={<IconSparkle className="h-6 w-6" />}
               title="填写个人信息"
-              headerRight={showLastInputHint ? '✓ 已自动填入上次的信息' : null}
+              headerRight={
+                <button
+                  type="button"
+                  onClick={() => setShowHistoryPicker(true)}
+                  className="flex items-center gap-1 rounded-lg border border-amber-400/25 bg-amber-400/10 px-2.5 py-1 text-[11px] text-amber-200 hover:bg-amber-400/20 transition-colors"
+                >
+                  <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  历史档案
+                </button>
+              }
             >
               <div className="grid gap-3">
 
