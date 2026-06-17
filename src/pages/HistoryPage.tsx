@@ -1,4 +1,30 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Component, useEffect, useMemo, useState } from 'react'
+import type { ReactNode } from 'react'
+
+/** 捕获子树渲染异常，防止整页白屏 */
+class DetailErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: string | null }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { error: null }
+  }
+  static getDerivedStateFromError(err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) }
+  }
+  render() {
+    if (this.state.error) {
+      return (
+        <div className="mt-4 rounded-xl border border-rose-400/30 bg-rose-400/10 px-4 py-3">
+          <p className="text-sm font-medium text-rose-300">渲染出错</p>
+          <p className="mt-1 text-xs text-rose-400/80 break-all">{this.state.error}</p>
+        </div>
+      )
+    }
+    return this.props.children
+  }
+}
 import {
   AI_READING_SERIF,
   READING_PANEL_SURFACE_STYLE,
@@ -403,9 +429,11 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
             {computedLoading ? <p className="text-sm text-slate-400">加载排盘结果…</p> : null}
             {computedError ? <p className="text-sm text-rose-400">{computedError}</p> : null}
             {!computedLoading && !computedError && detail?.input_data && computedResults ? (
-              <div className="space-y-5">
-                <Step2ChartsSection input={detail.input_data as UserInput} results={computedResults} />
-              </div>
+              <DetailErrorBoundary>
+                <div className="space-y-5">
+                  <Step2ChartsSection input={detail.input_data as UserInput} results={computedResults} />
+                </div>
+              </DetailErrorBoundary>
             ) : null}
           </>
         )}
@@ -441,19 +469,17 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
         )}
 
         {/* AI 解读报告 */}
-        {detailLoading ? (
-          <p className="text-sm text-slate-400">加载中…</p>
-        ) : detailError ? (
-          <p className="text-sm text-rose-400">{detailError}</p>
-        ) : detail ? (
-          <div className="mt-6 w-full">
-            <div
-              className="prose prose-invert prose-sm ai-report-prose max-w-none leading-relaxed rounded-2xl border border-amber-900/35 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.06)] sm:p-7"
-              style={{ fontFamily: AI_READING_SERIF, ...READING_PANEL_SURFACE_STYLE }}
-            >
-              <AiReportMarkdown markdown={displayMd || detail.ai_report || ''} />
+        {!detailLoading && !detailError && detail ? (
+          <DetailErrorBoundary>
+            <div className="mt-6 w-full">
+              <div
+                className="prose prose-invert prose-sm ai-report-prose max-w-none leading-relaxed rounded-2xl border border-amber-900/35 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.06)] sm:p-7"
+                style={{ fontFamily: AI_READING_SERIF, ...READING_PANEL_SURFACE_STYLE }}
+              >
+                <AiReportMarkdown markdown={displayMd || detail.ai_report || ''} />
+              </div>
             </div>
-          </div>
+          </DetailErrorBoundary>
         ) : null}
 
         {/* 删除确认弹窗 */}
