@@ -185,3 +185,14 @@ export async function generateBindingCode(): Promise<string> {
 
   return code
 }
+
+/**
+ * 小程序访客模式：通过 Vercel API 免登录获取指定 uid 用户的历史记录
+ * （绕过 Supabase RLS，在后端用 service_role key 查询）
+ */
+export async function getReadingsForMiniprogram(uid: string): Promise<ReadingListItem[]> {
+  const res = await fetch(`/api/miniprogram-readings?uid=${encodeURIComponent(uid)}`)
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  const json = await res.json() as { readings: ReadingListItem[] }
+  return json.readings ?? []
+}

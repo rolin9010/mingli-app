@@ -1,3 +1,18 @@
 {
-  "rewrites": [{ "source": "/(.*?)", "destination": "/" }]
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api/$1"
+    },
+    {
+      "source": "/(.*?)",
+      "destination": "/"
+    }
+  ],
+  "crons": [
+    {
+      "path": "/api/keep-alive",
+      "schedule": "0 3 * * *"
+    }
+  ]
 }

@@ -21,7 +21,8 @@ import PointsModal, { PointsBadge } from '../components/PointsModal'
 import ConsultModal from '../components/ConsultModal'
 import type { ReportResults, UserInput } from '../lib/types'
 import { Step2ChartsSection } from './Step2Results'
-import DailyTip from '../components/DailyTip'
+// DailyTip 仅在松眠小程序使用，wuxingme.cn 不展示
+// import DailyTip from '../components/DailyTip'
 
 // ─── Tab 主题定义 ──────────────────────────────────────────────────────────────
 
@@ -293,8 +294,8 @@ const text = await fetchAIReading(prompt)
           <Step2ChartsSection input={input} results={results} />
         </div>
 
-        {/* 五行贴士·今日 */}
-        <DailyTip input={input} results={results} />
+        {/* 五行贴士·今日 — 仅松眠小程序展示，web 端隐藏 */}
+        {/* <DailyTip input={input} results={results} /> */
 
         {/* AI 解读区 */}
         <div className="w-full">

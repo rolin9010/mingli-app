@@ -36,6 +36,7 @@ import {
   generateBindingCode,
   getReading,
   getReadings,
+  getReadingsForMiniprogram,
   isHeBanInputData,
   setPrimaryReading,
   updateReadingName,
@@ -82,9 +83,13 @@ function getBirthLabel(row: ReadingListItem): string {
 
 export interface HistoryPageProps {
   onBack: () => void
+  /** 小程序访客模式：传入 supabase user_id，免登录查看该用户的历史记录（只读） */
+  guestUid?: string
 }
 
-export default function HistoryPage({ onBack }: HistoryPageProps) {
+export default function HistoryPage({ onBack, guestUid }: HistoryPageProps) {
+  /** 是否为小程序访客只读模式 */
+  const isGuest = Boolean(guestUid)
   const [list, setList] = useState<ReadingListItem[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [listError, setListError] = useState('')
@@ -157,7 +162,10 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
     let cancelled = false
     void (async () => {
       try {
-        const rows = await getReadings()
+        // 访客模式：通过 Vercel API 免登录查询；普通模式：走 Supabase Auth
+        const rows = guestUid
+          ? await getReadingsForMiniprogram(guestUid)
+          : await getReadings()
         if (!cancelled) {
           setList(rows)
           // 找出已标记的主档案
@@ -173,13 +181,27 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
     return () => {
       cancelled = true
     }
-  }, [])
+  }, [guestUid])
 
   useEffect(() => {
     if (!selectedId) {
       setDetail(null)
       return
     }
+
+    // 访客模式：数据已在 list 里（API 返回了完整字段），直接从 list 取
+    if (isGuest) {
+      const row = list?.find(r => r.id === selectedId)
+      if (row) {
+        setDetail(row as unknown as ReadingDetail)
+        setNameInput(row.name ?? '')
+      } else {
+        setDetailError('记录未找到')
+      }
+      setDetailLoading(false)
+      return
+    }
+
     let cancelled = false
     setDetailLoading(true)
     setDetailError('')
@@ -201,7 +223,7 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
     return () => {
       cancelled = true
     }
-  }, [selectedId])
+  }, [selectedId, isGuest, list])
 
   // 单人排盘计算
   useEffect(() => {
@@ -370,7 +392,7 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
           >
             ← 返回列表
           </button>
-          {detail && !detailLoading && (
+          {detail && !detailLoading && !isGuest && (
             <button
               type="button"
               onClick={() => setDeletingId(selectedId)}
@@ -427,13 +449,15 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
                 {isHeBan && (
                   <span className="rounded-full bg-amber-400/15 px-2 py-0.5 text-xs text-amber-300">合盘</span>
                 )}
-                <button
-                  type="button"
-                  onClick={() => { setEditingName(true); setNameInput(detail.name ?? '') }}
-                  className="ml-1 rounded-lg border border-white/10 px-2 py-0.5 text-[11px] text-slate-400 hover:border-white/20 hover:text-slate-200"
-                >
-                  ✎ 修改名称
-                </button>
+                {!isGuest && (
+                  <button
+                    type="button"
+                    onClick={() => { setEditingName(true); setNameInput(detail.name ?? '') }}
+                    className="ml-1 rounded-lg border border-white/10 px-2 py-0.5 text-[11px] text-slate-400 hover:border-white/20 hover:text-slate-200"
+                  >
+                    ✎ 修改名称
+                  </button>
+                )}
               </div>
             )}
             {nameError && <p className="mt-1 text-xs text-rose-400">{nameError}</p>}
@@ -547,8 +571,8 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
       </button>
       <h2 className="mb-6 text-lg font-semibold tracking-wide text-amber-100">历史档案</h2>
 
-      {/* 绑定小程序入口 */}
-      <div className="mb-5">
+      {/* 绑定小程序入口（访客模式不显示） */}
+      {!isGuest && <div className="mb-5">
         <button
           type="button"
           onClick={() => setShowBindingPanel(v => !v)}
@@ -602,7 +626,7 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
             )}
           </div>
         )}
-      </div>
+      </div>}
 
       {loading ? (
         <p className="text-sm text-slate-400">加载中…</p>
@@ -675,32 +699,34 @@ export default function HistoryPage({ onBack }: HistoryPageProps) {
                     </div>
                   </button>
 
-                  {/* 右侧操作列 */}
-                  <div className="flex flex-col gap-1 py-2 pr-2">
-                    {/* 设为我的五行 */}
-                    <button
-                      type="button"
-                      title={isPrimary ? '已是我的五行' : '设为我的五行'}
-                      disabled={primaryLoading || isPrimary}
-                      onClick={() => void handleSetPrimary(row.id)}
-                      className={`rounded-lg border px-2 py-1.5 text-[11px] font-medium transition ${
-                        isPrimary
-                          ? 'border-amber-400/30 bg-amber-400/10 text-amber-300 cursor-default'
-                          : 'border-white/10 bg-white/[0.04] text-slate-400 hover:border-amber-400/40 hover:text-amber-200'
-                      } disabled:opacity-60`}
-                    >
-                      {isPrimary ? '★' : '☆'}
-                    </button>
-                    {/* 删除 */}
-                    <button
-                      type="button"
-                      onClick={() => setDeletingId(row.id)}
-                      title="删除"
-                      className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-[11px] text-rose-400/70 transition hover:border-rose-400/30 hover:bg-rose-400/10 hover:text-rose-300"
-                    >
-                      ✕
-                    </button>
-                  </div>
+                  {/* 右侧操作列（访客只读模式隐藏写操作） */}
+                  {!isGuest && (
+                    <div className="flex flex-col gap-1 py-2 pr-2">
+                      {/* 设为我的五行 */}
+                      <button
+                        type="button"
+                        title={isPrimary ? '已是我的五行' : '设为我的五行'}
+                        disabled={primaryLoading || isPrimary}
+                        onClick={() => void handleSetPrimary(row.id)}
+                        className={`rounded-lg border px-2 py-1.5 text-[11px] font-medium transition ${
+                          isPrimary
+                            ? 'border-amber-400/30 bg-amber-400/10 text-amber-300 cursor-default'
+                            : 'border-white/10 bg-white/[0.04] text-slate-400 hover:border-amber-400/40 hover:text-amber-200'
+                        } disabled:opacity-60`}
+                      >
+                        {isPrimary ? '★' : '☆'}
+                      </button>
+                      {/* 删除 */}
+                      <button
+                        type="button"
+                        onClick={() => setDeletingId(row.id)}
+                        title="删除"
+                        className="rounded-lg border border-white/10 bg-white/[0.04] px-2 py-1.5 text-[11px] text-rose-400/70 transition hover:border-rose-400/30 hover:bg-rose-400/10 hover:text-rose-300"
+                      >
+                        ✕
+                      </button>
+                    </div>
+                  )}
                 </div>
               </li>
             )

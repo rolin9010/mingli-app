@@ -315,7 +315,12 @@ function WizardApp({ user }: { user: User | null }) {
   const [showConsult, setShowConsult] = useState(false)
 
   // 检测是否从微信小程序 WebView 打开（隐藏顶部导航栏）
-  const isMiniprogram = new URLSearchParams(window.location.search).get('miniprogram') === '1'
+  const urlParams = new URLSearchParams(window.location.search)
+  const isMiniprogram = urlParams.get('miniprogram') === '1'
+  // 小程序访客历史模式：?miniprogram=1&view=history&uid=<supabase_user_id>
+  const guestHistoryUid = (isMiniprogram && urlParams.get('view') === 'history')
+    ? (urlParams.get('uid') ?? '')
+    : ''
 
   // 小程序模式：修复各种 WebView 兼容问题
   useEffect(() => {
@@ -356,6 +361,17 @@ function WizardApp({ user }: { user: User | null }) {
     setHeBanStep(1)
     setHeBanResults(null)
     clearWizardSnapshot()
+  }
+
+  // 小程序访客历史模式：直接全屏展示历史页，无需登录
+  if (guestHistoryUid) {
+    return (
+      <div className="min-h-screen">
+        <div className="pt-4">
+          <HistoryPage onBack={() => { /* webview 里无意义，但接口需要 */ }} guestUid={guestHistoryUid} />
+        </div>
+      </div>
+    )
   }
 
   return (
