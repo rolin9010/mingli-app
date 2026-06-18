@@ -3,9 +3,10 @@ import { createPortal } from 'react-dom'
 import type React from 'react'
 import { usePoints } from '../lib/PointsContext'
 import { getInviteStats } from '../lib/points'
+import { getMembershipInfo, MEMBERSHIP_PLANS, type MembershipInfo } from '../lib/membership'
 import { supabase } from '../lib/supabase'
 
-// ─── 常规购买套餐（参考图） ───────────────────────────────────────────────────
+// ─── 常规购买套餐（积分充值） ─────────────────────────────────────────────────
 const RECHARGE_PACKS = [
   { points: 3,   price: '¥3',   unit: '1.00' },
   { points: 8,   price: '¥7',   unit: '0.88' },
@@ -87,19 +88,25 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
   const [inviteLink, setInviteLink] = useState<string>('')
   const [copied, setCopied] = useState(false)
 
-  // 购买 toast
+  // 购买 toast（积分充值占位）
   const [buyToast, setBuyToast] = useState(false)
 
-  // 打开时加载邀请数据
+  // 会员状态
+  const [memberInfo, setMemberInfo] = useState<MembershipInfo | null>(null)
+  const [memberLoading, setMemberLoading] = useState(false)
+
+  // 打开时加载邀请数据 + 会员状态
   useEffect(() => {
     if (!open) return
-    // 获取当前用户 ID 拼接邀请链接
     supabase.auth.getUser().then(({ data }) => {
-      if (data.user) {
-        setInviteLink(`${window.location.origin}/?ref=${data.user.id}`)
-      }
+      if (data.user) setInviteLink(`${window.location.origin}/?ref=${data.user.id}`)
     })
     getInviteStats().then(setInviteStats)
+    // 加载会员状态
+    setMemberLoading(true)
+    getMembershipInfo(true).then((info) => {
+      setMemberInfo(info)
+    }).finally(() => setMemberLoading(false))
   }, [open])
 
   if (!open) return null
@@ -111,6 +118,12 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
   }
 
   const handleBuyClick = () => {
+    setBuyToast(true)
+    setTimeout(() => setBuyToast(false), 3000)
+  }
+
+  // 会员套餐购买（支付接入后替换此函数）
+  const handleMemberPlanClick = (_planId: string) => {
     setBuyToast(true)
     setTimeout(() => setBuyToast(false), 3000)
   }
@@ -300,7 +313,69 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
 
           {/* 购买 */}
           {tab === 'buy' && (
-            <div className="p-4">
+            <div className="p-4 space-y-5">
+
+              {/* ── 会员套餐区块 ── */}
+              <div>
+                <div className="mb-2.5 flex items-center gap-2">
+                  <span className="text-xs font-semibold text-slate-200">每日专属贴士会员</span>
+                  {memberLoading ? (
+                    <span className="text-[10px] text-slate-500 animate-pulse">查询中…</span>
+                  ) : memberInfo?.isMember ? (
+                    <span className="rounded-full bg-emerald-500/15 border border-emerald-500/25 px-2 py-0.5 text-[10px] text-emerald-300">
+                      ✓ 有效至 {memberInfo.expiresAt?.toLocaleDateString('zh-CN')}（剩 {memberInfo.daysLeft} 天）
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-white/[0.05] border border-white/10 px-2 py-0.5 text-[10px] text-slate-500">
+                      未开通
+                    </span>
+                  )}
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  {MEMBERSHIP_PLANS.map((plan) => (
+                    <button
+                      key={plan.id}
+                      type="button"
+                      onClick={() => handleMemberPlanClick(plan.id)}
+                      className={`relative flex flex-col rounded-2xl border p-3 text-left transition-all active:scale-[0.98] ${
+                        plan.highlight
+                          ? 'border-amber-400/50 bg-amber-400/8 hover:bg-amber-400/12'
+                          : 'border-[#333] bg-[#1a1a1a] hover:border-amber-400/25 hover:bg-[#1e1e1e]'
+                      }`}
+                    >
+                      {plan.badge && (
+                        <span className={`absolute right-2 top-2 rounded-full px-1.5 py-0.5 text-[9px] font-bold ${
+                          plan.highlight ? 'bg-amber-400 text-slate-900' : 'bg-white/10 text-slate-300'
+                        }`}>
+                          {plan.badge}
+                        </span>
+                      )}
+                      <div className="flex items-center gap-1 mb-1">
+                        <svg className="h-3.5 w-3.5 text-amber-400/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8">
+                          <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+                        </svg>
+                      </div>
+                      <div className={`text-lg font-bold ${plan.highlight ? 'text-amber-300' : 'text-amber-300'}`}>{plan.price}</div>
+                      <div className="mt-0.5 text-xs font-medium text-slate-200">{plan.label}</div>
+                      <div className="mt-0.5 text-[10px] text-slate-500">{plan.duration} 天</div>
+                    </button>
+                  ))}
+                </div>
+
+                <p className="mt-2 text-[10px] text-slate-600 leading-relaxed">
+                  会员权益：每日根据你的八字五行生成专属建议，每天自动刷新 · 会员期内无限查看
+                </p>
+              </div>
+
+              {/* 分割线 */}
+              <div className="flex items-center gap-2">
+                <div className="flex-1 border-t border-white/8" />
+                <span className="text-[10px] text-slate-600">积分充值</span>
+                <div className="flex-1 border-t border-white/8" />
+              </div>
+
+              {/* ── 积分充值区块 ── */}
               <div className="grid grid-cols-2 gap-2.5">
                 {RECHARGE_PACKS.map((pack) => (
                   <button

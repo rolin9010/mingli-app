@@ -1,5 +1,97 @@
 import { buildLiuNianFlow } from './mingli/baziDayun'
 import type { HeBanRelationType } from './types'
+import { supabase } from './supabase'
+
+/** 获取当前会话的 access token */
+async function getToken(): Promise<string> {
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('未登录，请先登录后再使用')
+  return session.access_token
+}
+
+/** 通用 API Route 调用（非流式）*/
+async function callApiRoute(
+  endpoint: string,
+  body: Record<string, unknown>,
+): Promise<string> {
+  for (let i = 0; i < 3; i++) {
+    try {
+      const token = await getToken()
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify(body),
+      })
+      const text = await res.text()
+      if (!res.ok) {
+        let msg = `服务错误 ${res.status}`
+        try { msg = (JSON.parse(text) as { error?: string; message?: string }).message ?? (JSON.parse(text) as { error?: string }).error ?? msg } catch { /* 静默 */ }
+        throw new Error(msg)
+      }
+      const data = JSON.parse(text) as { tip?: string; content?: string }
+      return (data.tip ?? data.content ?? text)
+    } catch (e: unknown) {
+      if (i === 2) throw e
+      await new Promise((r) => setTimeout(r, 1000 * (i + 1)))
+    }
+  }
+  throw new Error('重试失败')
+}
+
+/**
+ * 流式调用 /api/ai/reading，返回 AsyncGenerator
+ * 调用方通过 for await 逐块拿到文本
+ */
+export async function* fetchAIReadingStream(
+  prompt: string,
+  type: 'single' | 'heban' = 'single',
+  mode: 'quick' | 'deep' = 'quick',
+  systemPrompt?: string,
+): AsyncGenerator<string> {
+  const token = await getToken()
+  const res = await fetch('/api/ai/reading', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`,
+    },
+    body: JSON.stringify({ prompt, type, mode, systemPrompt }),
+  })
+
+  if (!res.ok) {
+    const text = await res.text()
+    let msg = `服务错误 ${res.status}`
+    try { msg = (JSON.parse(text) as { message?: string; error?: string }).message ?? (JSON.parse(text) as { error?: string }).error ?? msg } catch { /* 静默 */ }
+    throw new Error(msg)
+  }
+
+  const reader = res.body?.getReader()
+  if (!reader) throw new Error('无法读取响应流')
+  const decoder = new TextDecoder()
+  let buffer = ''
+
+  while (true) {
+    const { done, value } = await reader.read()
+    if (done) break
+    buffer += decoder.decode(value, { stream: true })
+    // SSE 按行解析
+    const lines = buffer.split('\n')
+    buffer = lines.pop() ?? ''
+    for (const line of lines) {
+      if (!line.startsWith('data: ')) continue
+      const data = line.slice(6).trim()
+      if (data === '[DONE]') return
+      try {
+        const parsed = JSON.parse(data) as { choices?: { delta?: { content?: string } }[] }
+        const chunk = parsed.choices?.[0]?.delta?.content
+        if (chunk) yield chunk
+      } catch { /* 忽略解析失败的行 */ }
+    }
+  }
+}
 
 const SYSTEM_PROMPT = `# 角色设定
 你是一位精通中国传统命理学（四柱八字）与中医体质学的顾问，以阴阳五行学说为根基，帮助用户认识先天体质特点与身心优劣势，给出切实可行的调整建议。
@@ -123,35 +215,16 @@ const SYSTEM_PROMPT = `# 角色设定
 - 未来年份运势必须与八字流年干支挂钩，标题格式如「2026丙午年」。
 - **各主题副标题（"——"后的部分）必须个性化**，不得用通用句式，必须反映该用户的真实五行特质。`
 
-export async function fetchAIReading(prompt: string): Promise<string> {
-  for (let i = 0; i < 3; i++) {
-    try {
-      const res = await fetch('https://api.deepseek.com/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY}` },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            {
-              role: 'system',
-              content: SYSTEM_PROMPT,
-            },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.85,
-          max_tokens: 8000,
-        }),
-      })
-      const text = await res.text()
-      if (!res.ok) throw new Error(`AI API 错误: ${res.status} ${text}`)
-      const data = JSON.parse(text)
-      return data.choices[0].message.content as string
-    } catch (e: any) {
-      if (i === 2) throw e
-      await new Promise((r) => setTimeout(r, 1000))
-    }
+/**
+ * 非流式调用（兼容旧调用方，内部把流式内容拼接后返回）
+ * 注意：此函数仍需登录，且会扣积分
+ */
+export async function fetchAIReading(prompt: string, mode: 'quick' | 'deep' = 'quick'): Promise<string> {
+  let result = ''
+  for await (const chunk of fetchAIReadingStream(prompt, 'single', mode, SYSTEM_PROMPT)) {
+    result += chunk
   }
-  throw new Error('重试失败')
+  return result
 }
 
 // ── 合盘 System Prompt ──────────────────────────────────────────────────────────
@@ -330,45 +403,16 @@ ${usersData}
 13. **全文只能基于五行体系**，禁止提及紫微斗数、命宫、主星、星盘、占星、血型、MBTI 等任何非五行内容。`
 }
 
-export async function fetchHeBanAIReading(prompt: string): Promise<string> {
-  for (let i = 0; i < 3; i++) {
-    try {
-      const res = await fetch('https://api.deepseek.com/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY}` },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            { role: 'system', content: HEBAN_SYSTEM_PROMPT },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.85,
-          max_tokens: 6000,
-        }),
-      })
-      const text = await res.text()
-      if (!res.ok) throw new Error(`AI API 错误: ${res.status} ${text}`)
-      const data = JSON.parse(text)
-      return data.choices[0].message.content as string
-    } catch (e: any) {
-      if (i === 2) throw e
-      await new Promise((r) => setTimeout(r, 1000))
-    }
+export async function fetchHeBanAIReading(prompt: string, mode: 'quick' | 'deep' = 'quick'): Promise<string> {
+  let result = ''
+  for await (const chunk of fetchAIReadingStream(prompt, 'heban', mode, HEBAN_SYSTEM_PROMPT)) {
+    result += chunk
   }
-  throw new Error('重试失败')
+  return result
 }
 
 // ── 五行每日贴士 ─────────────────────────────────────────────────────────────
-
-const DAILY_TIP_SYSTEM_PROMPT = `你是一位精通中国传统命理学（四柱八字）与阴阳五行养生的导师。
-每天根据用户的五行格局与当日天干地支，给出一条简短、温暖、实用的养生/能量贴士。
-
-要求：
-1. 只输出一条贴士，字数在 60-120 字之间，语言亲切口语化，像朋友发的一条暖心消息。
-2. 内容必须结合用户的具体五行旺衰（引用具体百分比数字）+ 今日干支能量，给出今天特别适合做的 1 件具体事情。
-3. 末尾附一个对应五行的 Emoji（木🌿 火🔥 土🌍 金✨ 水💧），只用一个。
-4. 不出现标题、不分段，直接输出正文。
-5. 禁止出现紫微斗数、星盘、MBTI、血型等非五行内容。`
+// System Prompt 已移至服务端 /api/ai/daily-tip.ts，前端不再需要
 
 export function buildDailyTipPrompt(input: any, results: any, dateStr: string): string {
   const { name, birth, gender } = input
@@ -388,32 +432,9 @@ export function buildDailyTipPrompt(input: any, results: any, dateStr: string): 
 请基于以上信息，为${name}生成今天的五行养生贴士（60-120字，口语化，末尾一个Emoji）。`
 }
 
+/** 每日贴士：通过服务端 /api/ai/daily-tip 调用，需要会员 */
 export async function fetchDailyTip(prompt: string): Promise<string> {
-  for (let i = 0; i < 3; i++) {
-    try {
-      const res = await fetch('https://api.deepseek.com/chat/completions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${import.meta.env.VITE_DEEPSEEK_API_KEY}` },
-        body: JSON.stringify({
-          model: 'deepseek-chat',
-          messages: [
-            { role: 'system', content: DAILY_TIP_SYSTEM_PROMPT },
-            { role: 'user', content: prompt },
-          ],
-          temperature: 0.9,
-          max_tokens: 300,
-        }),
-      })
-      const text = await res.text()
-      if (!res.ok) throw new Error(`AI API 错误: ${res.status} ${text}`)
-      const data = JSON.parse(text)
-      return data.choices[0].message.content as string
-    } catch (e: any) {
-      if (i === 2) throw e
-      await new Promise((r) => setTimeout(r, 1000))
-    }
-  }
-  throw new Error('重试失败')
+  return callApiRoute('/api/ai/daily-tip', { prompt })
 }
 
 export function buildReadingPrompt(input: any, results: any, mode: 'quick' | 'deep' = 'quick'): string {

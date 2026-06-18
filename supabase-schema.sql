@@ -209,3 +209,61 @@ create trigger on_auth_user_created
 -- 给 support_messages 表加已读时间字段（若已存在会报错，可忽略）
 alter table support_messages
   add column if not exists admin_read_at timestamptz;
+
+-- ════════════════════════════════════════════════════════════════════════════
+-- 会员表（memberships）
+-- 在 Supabase 控制台 → SQL Editor 中执行
+-- ════════════════════════════════════════════════════════════════════════════
+
+create table if not exists memberships (
+  id           uuid default gen_random_uuid() primary key,
+  user_id      uuid not null references auth.users(id) on delete cascade,
+  plan         text not null default 'trial',   -- 'trial'|'monthly'|'quarterly'|'yearly'
+  starts_at    timestamptz not null default now(),
+  expires_at   timestamptz not null,
+  order_id     text,                             -- 支付订单号（微信支付 out_trade_no）
+  amount_fen   int,                              -- 实付金额（分）
+  created_at   timestamptz default now()
+);
+
+alter table memberships enable row level security;
+
+-- 用户只能读自己的会员记录，写入由服务端 service_role 完成
+create policy "用户可读自己的会员记录"
+  on memberships for select
+  using (auth.uid() = user_id);
+
+-- 管理员可读所有会员记录
+create policy "管理员可读所有会员记录"
+  on memberships for select
+  using (auth.email() = 'rolin9010@foxmail.com');
+
+-- 索引
+create index if not exists memberships_user_id_expires_at_idx
+  on memberships (user_id, expires_at desc);
+
+-- ── binding_codes 表（微信小程序绑定码）────────────────────────────────────────
+-- 如果之前没有建过，在此补充
+
+create table if not exists binding_codes (
+  id         uuid default gen_random_uuid() primary key,
+  code       text not null unique,
+  user_id    uuid not null references auth.users(id) on delete cascade,
+  expires_at timestamptz not null,
+  created_at timestamptz default now()
+);
+
+alter table binding_codes enable row level security;
+
+create policy "用户可读写自己的绑定码"
+  on binding_codes for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
+-- ── readings 表补充字段 ─────────────────────────────────────────────────────
+-- 添加 is_primary 和 bazi_summary 字段（若已存在会报错，可忽略）
+
+alter table readings
+  add column if not exists is_primary   boolean default false,
+  add column if not exists bazi_summary jsonb,
+  add column if not exists user_email   text;

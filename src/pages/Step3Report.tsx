@@ -295,7 +295,7 @@ const text = await fetchAIReading(prompt)
         </div>
 
         {/* 五行贴士·今日 — 仅松眠小程序展示，web 端隐藏 */}
-        {/* <DailyTip input={input} results={results} /> */
+        {/* <DailyTip input={input} results={results} /> */}
 
         {/* AI 解读区 */}
         <div className="w-full">
