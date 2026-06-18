@@ -1,10 +1,40 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 import type React from 'react'
 import { usePoints } from '../lib/PointsContext'
 import { getInviteStats } from '../lib/points'
-import { getMembershipInfo, MEMBERSHIP_PLANS, type MembershipInfo } from '../lib/membership'
+import { getMembershipInfo, MEMBERSHIP_PLANS, clearMembershipCache, type MembershipInfo } from '../lib/membership'
 import { supabase } from '../lib/supabase'
+
+// ─── 支付工具函数 ─────────────────────────────────────────────────────────────
+async function getToken(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.access_token ?? null
+}
+
+async function createOrder(planId: string, payType: 'native' | 'h5') {
+  const token = await getToken()
+  if (!token) throw new Error('未登录')
+  const res = await fetch('/api/pay/create-order', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+    body: JSON.stringify({ planId, payType }),
+  })
+  const data = await res.json() as { error?: string; outTradeNo?: string; codeUrl?: string; h5Url?: string }
+  if (!res.ok) throw new Error(data.error ?? '下单失败')
+  return data
+}
+
+async function queryOrder(outTradeNo: string): Promise<{ tradeState: string; isMember: boolean }> {
+  const token = await getToken()
+  if (!token) throw new Error('未登录')
+  const res = await fetch(`/api/pay/query-order?outTradeNo=${outTradeNo}`, {
+    headers: { 'Authorization': `Bearer ${token}` },
+  })
+  const data = await res.json() as { tradeState?: string; isMember?: boolean; error?: string }
+  if (!res.ok) throw new Error(data.error ?? '查询失败')
+  return { tradeState: data.tradeState ?? 'NOTPAY', isMember: data.isMember ?? false }
+}
 
 // ─── 常规购买套餐（积分充值） ─────────────────────────────────────────────────
 const RECHARGE_PACKS = [
@@ -95,6 +125,30 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
   const [memberInfo, setMemberInfo] = useState<MembershipInfo | null>(null)
   const [memberLoading, setMemberLoading] = useState(false)
 
+  // 支付弹窗状态
+  const [payState, setPayState] = useState<'idle' | 'creating' | 'polling' | 'success' | 'error'>('idle')
+  const [payError, setPayError] = useState('')
+  const [codeUrl, setCodeUrl] = useState('')           // Native 二维码 URL
+  const [_currentTradeNo, setCurrentTradeNo] = useState('')
+  const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
+  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
+  const [isWxBrowser, setIsWxBrowser] = useState(false)
+
+  useEffect(() => {
+    setIsWxBrowser(/MicroMessenger/i.test(navigator.userAgent))
+  }, [])
+
+  const stopPolling = useCallback(() => {
+    if (pollTimerRef.current) {
+      clearInterval(pollTimerRef.current)
+      pollTimerRef.current = null
+    }
+  }, [])
+
+  useEffect(() => {
+    return () => stopPolling()
+  }, [stopPolling])
+
   // 打开时加载邀请数据 + 会员状态
   useEffect(() => {
     if (!open) return
@@ -122,10 +176,65 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
     setTimeout(() => setBuyToast(false), 3000)
   }
 
-  // 会员套餐购买（支付接入后替换此函数）
-  const handleMemberPlanClick = (_planId: string) => {
-    setBuyToast(true)
-    setTimeout(() => setBuyToast(false), 3000)
+  // 会员套餐购买
+  const handleMemberPlanClick = async (planId: string) => {
+    setSelectedPlanId(planId)
+    setPayState('creating')
+    setPayError('')
+    setCodeUrl('')
+    stopPolling()
+
+    try {
+      // 微信内浏览器用 H5，其他用 Native 扫码
+      const payType = isWxBrowser ? 'h5' : 'native'
+      const result = await createOrder(planId, payType)
+
+      if (payType === 'h5' && result.h5Url) {
+        // H5：直接跳转，跳回后轮询
+        const returnUrl = encodeURIComponent(`${window.location.href}?checkPay=${result.outTradeNo}`)
+        window.location.href = `${result.h5Url}&redirect_url=${returnUrl}`
+        setCurrentTradeNo(result.outTradeNo!)
+        setPayState('polling')
+        return
+      }
+
+      if (result.codeUrl) {
+        setCodeUrl(result.codeUrl)
+        setCurrentTradeNo(result.outTradeNo!)
+        setPayState('polling')
+
+        // 每3秒轮询一次，最多2分钟
+        let tries = 0
+        pollTimerRef.current = setInterval(async () => {
+          tries++
+          if (tries > 40) {
+            stopPolling()
+            setPayState('error')
+            setPayError('支付超时，请重新尝试')
+            return
+          }
+          try {
+            const { tradeState, isMember } = await queryOrder(result.outTradeNo!)
+            if (tradeState === 'SUCCESS' || isMember) {
+              stopPolling()
+              clearMembershipCache()
+              getMembershipInfo(true).then(setMemberInfo)
+              setPayState('success')
+            }
+          } catch { /* 静默，继续轮询 */ }
+        }, 3000)
+      }
+    } catch (e: unknown) {
+      setPayState('error')
+      setPayError(e instanceof Error ? e.message : '创建订单失败')
+    }
+  }
+
+  const handlePayClose = () => {
+    stopPolling()
+    setPayState('idle')
+    setCodeUrl('')
+    setSelectedPlanId(null)
   }
 
   const handleCopy = async () => {
@@ -137,13 +246,111 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
 
   return (
     <>
-      {/* 悬浮 Toast：Portal 渲染到 body，完全脱离弹窗 DOM */}
+      {/* 悬浮 Toast：积分充值占位提示 */}
       {createPortal(
         <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 rounded-2xl border border-amber-400/40 bg-[#1a1200] px-4 py-2.5 text-xs font-medium text-amber-200 shadow-lg shadow-black/40 transition-all duration-300 ${
           buyToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
         }`}>
           <svg className="h-3.5 w-3.5 shrink-0 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-          购买链路建设中，请稍后再来～
+          积分充值购买链路建设中，请稍后再来～
+        </div>,
+        document.body
+      )}
+
+      {/* ── 会员支付弹窗（Portal 渲染，层级高于 PointsModal） ── */}
+      {payState !== 'idle' && createPortal(
+        <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" onClick={handlePayClose} />
+          <div className="relative w-full max-w-xs rounded-2xl border border-white/10 bg-[#111] p-6 shadow-2xl">
+
+            {/* 关闭按钮 */}
+            <button type="button" onClick={handlePayClose}
+              className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-full text-slate-500 hover:text-slate-300">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="h-4 w-4">
+                <path d="M18 6 6 18M6 6l12 12"/>
+              </svg>
+            </button>
+
+            {/* 套餐名称 */}
+            <p className="mb-4 text-center text-sm font-semibold text-slate-200">
+              {MEMBERSHIP_PLANS.find(p => p.id === selectedPlanId)?.label ?? '会员'}
+              <span className="ml-2 text-amber-300">
+                {MEMBERSHIP_PLANS.find(p => p.id === selectedPlanId)?.price}
+              </span>
+            </p>
+
+            {/* 创建中 */}
+            {payState === 'creating' && (
+              <div className="flex flex-col items-center gap-3 py-8">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+                <p className="text-xs text-slate-400">正在生成支付码…</p>
+              </div>
+            )}
+
+            {/* 二维码轮询中 */}
+            {payState === 'polling' && codeUrl && (
+              <div className="flex flex-col items-center gap-3">
+                {/* 用 qr API 生成二维码图片 */}
+                <div className="rounded-xl bg-white p-2">
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(codeUrl)}`}
+                    alt="微信支付二维码"
+                    width={160} height={160}
+                    className="block"
+                  />
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <div className="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-400" />
+                  <p className="text-xs text-slate-400">打开微信扫一扫完成支付</p>
+                </div>
+                <p className="text-[10px] text-slate-600">支付后自动开通，无需操作</p>
+              </div>
+            )}
+
+            {/* H5 跳转后等待 */}
+            {payState === 'polling' && !codeUrl && (
+              <div className="flex flex-col items-center gap-3 py-8">
+                <div className="h-8 w-8 animate-spin rounded-full border-2 border-amber-400 border-t-transparent" />
+                <p className="text-xs text-slate-400">等待支付结果…</p>
+                <p className="text-[10px] text-slate-600">完成支付后自动刷新</p>
+              </div>
+            )}
+
+            {/* 支付成功 */}
+            {payState === 'success' && (
+              <div className="flex flex-col items-center gap-3 py-6">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-emerald-500/15 border border-emerald-500/30">
+                  <svg className="h-7 w-7 text-emerald-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M20 6 9 17l-5-5"/>
+                  </svg>
+                </div>
+                <p className="text-sm font-semibold text-slate-200">支付成功！</p>
+                <p className="text-xs text-slate-400">会员已开通，每日专属贴士已解锁</p>
+                <button type="button" onClick={handlePayClose}
+                  className="mt-2 w-full rounded-xl bg-amber-400/20 border border-amber-400/30 py-2 text-sm font-medium text-amber-200 hover:bg-amber-400/30 transition-colors">
+                  开始使用
+                </button>
+              </div>
+            )}
+
+            {/* 支付失败/超时 */}
+            {payState === 'error' && (
+              <div className="flex flex-col items-center gap-3 py-6">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-rose-500/15 border border-rose-500/30">
+                  <svg className="h-7 w-7 text-rose-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path d="M12 8v4M12 16h.01"/><circle cx="12" cy="12" r="10"/>
+                  </svg>
+                </div>
+                <p className="text-sm font-semibold text-slate-200">支付失败</p>
+                <p className="text-xs text-slate-400 text-center">{payError}</p>
+                <button type="button"
+                  onClick={() => selectedPlanId && handleMemberPlanClick(selectedPlanId)}
+                  className="mt-2 w-full rounded-xl bg-amber-400/20 border border-amber-400/30 py-2 text-sm font-medium text-amber-200 hover:bg-amber-400/30 transition-colors">
+                  重新尝试
+                </button>
+              </div>
+            )}
+          </div>
         </div>,
         document.body
       )}
