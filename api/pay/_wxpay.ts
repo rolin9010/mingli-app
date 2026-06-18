@@ -3,7 +3,7 @@
  * 商户号：1600342350（直连模式）
  */
 
-import { createSign, createVerify, createHash, randomBytes } from 'crypto'
+import { createSign, createVerify, createHash, createDecipheriv, randomBytes } from 'crypto'
 
 // ── 环境变量读取 ────────────────────────────────────────────────────────────
 
@@ -117,9 +117,6 @@ export function decryptNotify(
   associatedData: string,
   apiV3Key: string,
 ): string {
-  const { createDecipheriv } = require('crypto') as typeof import('crypto')
-  const key = createHash('sha256').update(apiV3Key).digest() // APIv3 key 直接是32字节ASCII
-  // 实际上 apiV3Key 就是32字节，直接用 Buffer
   const keyBuf = Buffer.from(apiV3Key, 'utf8')
   const buf = Buffer.from(ciphertext, 'base64')
   const authTag = buf.slice(buf.length - 16)
