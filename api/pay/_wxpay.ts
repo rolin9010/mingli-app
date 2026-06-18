@@ -34,6 +34,26 @@ export function genOutTradeNo(): string {
   return `${Date.now()}${randomBytes(4).toString('hex')}`
 }
 
+// ── 规范化 PEM 私钥（处理各种换行问题） ──────────────────────────────────
+
+export function normalizePem(raw: string): string {
+  // 1. 把字面量 \n 换成真实换行
+  let pem = raw.replace(/\\n/g, '\n')
+  // 2. 去掉所有现有换行和空白，提取纯 base64 内容
+  const beginMatch = pem.match(/-----BEGIN ([^-]+)-----/)
+  const endMatch = pem.match(/-----END ([^-]+)-----/)
+  if (!beginMatch || !endMatch) return pem  // 格式异常，原样返回
+  const keyType = beginMatch[1]
+  // 提取 header/footer 之间的所有内容，去掉空白
+  const body = pem
+    .replace(/-----BEGIN [^-]+-----/, '')
+    .replace(/-----END [^-]+-----/, '')
+    .replace(/[\s\r\n]+/g, '')  // 去掉所有空白字符
+  // 每64字符加一个换行，重建标准 PEM
+  const lines = body.match(/.{1,64}/g) ?? []
+  return `-----BEGIN ${keyType}-----\n${lines.join('\n')}\n-----END ${keyType}-----`
+}
+
 // ── 构造签名字符串并签名 ──────────────────────────────────────────────────
 
 export function buildSign(
@@ -44,11 +64,7 @@ export function buildSign(
   body: string,
   privateKey: string,
 ): string {
-  // 处理换行符：环境变量里的 \n 可能是字面量
-  const pem = privateKey.includes('\\n')
-    ? privateKey.replace(/\\n/g, '\n')
-    : privateKey
-
+  const pem = normalizePem(privateKey)
   const message = `${method}\n${url}\n${timestamp}\n${nonce}\n${body}\n`
   const sign = createSign('RSA-SHA256')
   sign.update(message)
