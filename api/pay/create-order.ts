@@ -1,6 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { getWxPayConfig, wxpayRequest, genOutTradeNo } from './_wxpay'
+import { getWxPayConfig, wxpayRequest, genOutTradeNo } from './_wxpay.js'
 
 /**
  * POST /api/pay/create-order
@@ -106,7 +106,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
       // 构造小程序调起支付所需参数
       const { mchid: _mchid, serialNo, privateKey } = getWxPayConfig()
-      const { buildSign } = await import('./_wxpay')
+        const { buildSign } = await import('./_wxpay.js')
       const appId = process.env.WX_MINI_APPID ?? 'wxf1d2e889d05100bb'
       const timestamp = Math.floor(Date.now() / 1000).toString()
       const nonce = Math.random().toString(36).slice(2, 18)
