@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import { createSign } from 'crypto'
-import { getWxPayConfig, wxpayRequest, genOutTradeNo, buildSign as _buildSign } from './_wxpay.js'
+import { getWxPayConfig, wxpayRequest, genOutTradeNo, normalizePem } from './_wxpay.js'
 
 /**
  * POST /api/pay/create-order
@@ -106,13 +106,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       })
 
       // 构造小程序调起支付所需参数
-      const { mchid: _mchid, serialNo: _serialNo, privateKey } = getWxPayConfig()
+      const { privateKey } = getWxPayConfig()
       const appId = process.env.WX_MINI_APPID ?? 'wxf1d2e889d05100bb'
       const timestamp = Math.floor(Date.now() / 1000).toString()
       const nonce = Math.random().toString(36).slice(2, 18)
       const prepayId = `prepay_id=${result.prepay_id}`
       const signStr = `${appId}\n${timestamp}\n${nonce}\n${prepayId}\n`
-      const pem = privateKey.includes('\\n') ? privateKey.replace(/\\n/g, '\n') : privateKey
+      const pem = normalizePem(privateKey)
       const signer = createSign('RSA-SHA256')
       signer.update(signStr)
       const paySign = signer.sign(pem, 'base64')
