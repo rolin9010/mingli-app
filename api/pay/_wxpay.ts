@@ -99,7 +99,25 @@ export async function wxpayRequest<T>(
 ): Promise<T> {
   const { mchid, serialNo, privateKey } = getWxPayConfig()
   const bodyStr = body ? JSON.stringify(body) : ''
-  const auth = buildAuthHeader(method, path, bodyStr, mchid, serialNo, privateKey)
+
+  // 构造签名消息（用于调试）
+  const timestamp = Math.floor(Date.now() / 1000).toString()
+  const nonce = nonceStr()
+  const signMessage = `${method}\n${path}\n${timestamp}\n${nonce}\n${bodyStr}\n`
+  const pem = normalizePem(privateKey)
+  const signObj = createSign('RSA-SHA256')
+  signObj.update(signMessage)
+  signObj.end()
+  const signature = signObj.sign(pem, 'base64')
+  const auth = `WECHATPAY2-SHA256-RSA2048 mchid="${mchid}",nonce_str="${nonce}",timestamp="${timestamp}",serial_no="${serialNo}",signature="${signature}"`
+
+  console.log('[wxpay] path:', path)
+  console.log('[wxpay] method:', method)
+  console.log('[wxpay] mchid:', mchid)
+  console.log('[wxpay] serialNo:', serialNo)
+  console.log('[wxpay] bodyStr length:', bodyStr.length)
+  console.log('[wxpay] signMessage:', JSON.stringify(signMessage))
+  console.log('[wxpay] auth header (first 120):', auth.slice(0, 120))
 
   const res = await fetch(`${WXPAY_BASE}${path}`, {
     method,
@@ -113,6 +131,8 @@ export async function wxpayRequest<T>(
   })
 
   const text = await res.text()
+  console.log('[wxpay] response status:', res.status)
+  console.log('[wxpay] response body:', text.slice(0, 300))
   if (!res.ok) {
     let msg = `微信支付 API 错误 ${res.status}`
     try {
