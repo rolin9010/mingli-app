@@ -126,6 +126,7 @@ export async function wxpayRequest<T>(
     headers: {
       'Content-Type': 'application/json',
       'Accept': 'application/json',
+      'Accept-Language': 'zh-CN',
       'Authorization': auth,
       'User-Agent': 'wuxingme/1.0',
     },

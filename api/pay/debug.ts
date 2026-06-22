@@ -46,6 +46,7 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
       method: 'GET',
       headers: {
         'Accept': 'application/json',
+        'Accept-Language': 'zh-CN',
         'Authorization': auth,
         'User-Agent': 'wuxingme/1.0',
       },
