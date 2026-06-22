@@ -9,8 +9,8 @@ import { createSign, randomBytes } from 'crypto'
 export default async function handler(_req: VercelRequest, res: VercelResponse) {
   const raw = process.env.WX_PRIVATE_KEY ?? ''
   const mchid = process.env.WX_MCHID ?? ''
-  // 使用正确的40位序列号（从 apiclient_cert.pem 提取）
-  const serialNo = process.env.WX_CERT_SERIAL_NO || '481E7277AC89ED66F224759A674FAF557E757D5C'
+  // 正确的40位序列号（从 apiclient_cert.pem 用 openssl 提取，环境变量里的是旧值）
+  const serialNo = '481E7277AC89ED66F224759A674FAF557E757D5C'
 
   const info: Record<string, unknown> = {
     mchid,
