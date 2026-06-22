@@ -18,8 +18,9 @@ export default async function handler(_req: VercelRequest, res: VercelResponse) 
     serialNo,
     serialNo_length: serialNo.length,
     env_serialNo: process.env.WX_CERT_SERIAL_NO ?? '(未设置)',
-    notify_url: notifyUrl,
+    notify_url_raw: JSON.stringify(notifyUrl),
     notify_url_length: notifyUrl.length,
+    deploy_time: new Date().toISOString(),
     key_ok: false,
   }
 
