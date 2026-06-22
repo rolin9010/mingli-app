@@ -9,12 +9,13 @@ import { createSign, createVerify, createHash, createDecipheriv, randomBytes } f
 
 export function getWxPayConfig() {
   const mchid = process.env.WX_MCHID
-  const serialNo = process.env.WX_CERT_SERIAL_NO
+  // 证书序列号：环境变量优先，回退到硬编码的正确值
+  const serialNo = process.env.WX_CERT_SERIAL_NO || '481E7277AC89ED66F224759A674FAF557E757D5C'
   const privateKey = process.env.WX_PRIVATE_KEY
   const apiV3Key = process.env.WX_API_V3_KEY
   const notifyUrl = process.env.WX_NOTIFY_URL
 
-  if (!mchid || !serialNo || !privateKey || !apiV3Key || !notifyUrl) {
+  if (!mchid || !privateKey || !apiV3Key || !notifyUrl) {
     throw new Error('微信支付配置不完整，请检查环境变量')
   }
 
