@@ -14,9 +14,10 @@ export function getWxPayConfig() {
   const serialNo = '481E7277AC89ED66F224759A674FAF557E757D5C'
   const privateKey = process.env.WX_PRIVATE_KEY
   const apiV3Key = process.env.WX_API_V3_KEY
-  const notifyUrl = process.env.WX_NOTIFY_URL
+  // notify_url 必须是合法的 https URL，环境变量可能格式不对
+  const notifyUrl = process.env.WX_NOTIFY_URL || 'https://wuxingme.cn/api/pay/notify'
 
-  if (!mchid || !privateKey || !apiV3Key || !notifyUrl) {
+  if (!mchid || !privateKey || !apiV3Key) {
     throw new Error('微信支付配置不完整，请检查环境变量')
   }
 
