@@ -149,6 +149,42 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
     return () => stopPolling()
   }, [stopPolling])
 
+  // H5 支付跳回后，检查 URL 里的 checkPay 参数
+  useEffect(() => {
+    if (!open) return
+    const params = new URLSearchParams(window.location.search)
+    const tradeNo = params.get('checkPay')
+    if (!tradeNo) return
+
+    // 清掉 URL 参数，避免刷新重复检查
+    const newUrl = window.location.pathname
+    window.history.replaceState({}, '', newUrl)
+
+    setPayState('polling')
+    setSelectedPlanId(null)
+
+    // 轮询最多 10 次（30秒）
+    let tries = 0
+    const timer = setInterval(async () => {
+      tries++
+      if (tries > 10) {
+        clearInterval(timer)
+        setPayState('error')
+        setPayError('未检测到支付结果，如已支付请刷新页面')
+        return
+      }
+      try {
+        const { tradeState, isMember } = await queryOrder(tradeNo)
+        if (tradeState === 'SUCCESS' || isMember) {
+          clearInterval(timer)
+          clearMembershipCache()
+          getMembershipInfo(true).then(setMemberInfo)
+          setPayState('success')
+        }
+      } catch { /* 继续轮询 */ }
+    }, 3000)
+  }, [open])
+
   // 打开时加载邀请数据 + 会员状态
   useEffect(() => {
     if (!open) return
@@ -185,44 +221,16 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
     stopPolling()
 
     try {
-      // 微信内浏览器用 H5，其他用 Native 扫码
-      const payType = isWxBrowser ? 'h5' : 'native'
-      const result = await createOrder(planId, payType)
+      // 统一使用 H5 支付（小微商户不支持 Native 扫码）
+      const result = await createOrder(planId, 'h5')
 
-      if (payType === 'h5' && result.h5Url) {
-        // H5：直接跳转，跳回后轮询
-        const returnUrl = encodeURIComponent(`${window.location.href}?checkPay=${result.outTradeNo}`)
+      if (result.h5Url) {
+        // H5：跳转到微信支付页面，支付完跳回
+        const returnUrl = encodeURIComponent(`${window.location.origin}${window.location.pathname}?checkPay=${result.outTradeNo}`)
         window.location.href = `${result.h5Url}&redirect_url=${returnUrl}`
         setCurrentTradeNo(result.outTradeNo!)
         setPayState('polling')
         return
-      }
-
-      if (result.codeUrl) {
-        setCodeUrl(result.codeUrl)
-        setCurrentTradeNo(result.outTradeNo!)
-        setPayState('polling')
-
-        // 每3秒轮询一次，最多2分钟
-        let tries = 0
-        pollTimerRef.current = setInterval(async () => {
-          tries++
-          if (tries > 40) {
-            stopPolling()
-            setPayState('error')
-            setPayError('支付超时，请重新尝试')
-            return
-          }
-          try {
-            const { tradeState, isMember } = await queryOrder(result.outTradeNo!)
-            if (tradeState === 'SUCCESS' || isMember) {
-              stopPolling()
-              clearMembershipCache()
-              getMembershipInfo(true).then(setMemberInfo)
-              setPayState('success')
-            }
-          } catch { /* 静默，继续轮询 */ }
-        }, 3000)
       }
     } catch (e: unknown) {
       setPayState('error')
