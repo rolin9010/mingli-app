@@ -49,15 +49,11 @@ function isUniqueViolation(error: unknown): boolean {
 }
 
 export function buildAttach(userId: string, item: PurchaseItem): string {
+  // 微信支付 attach 限制为 128 字节。权益和价格都以服务端商品表为准，
+  // 因而订单只需要携带不可伪造关联所需的用户 ID 与商品 ID。
   return JSON.stringify({
-    userId,
-    kind: item.kind,
-    itemId: item.id,
-    planId: item.kind === 'membership' ? item.id : undefined,
-    days: item.kind === 'membership' ? item.days : undefined,
-    bonusPoints: item.kind === 'membership' ? item.bonusPoints : undefined,
-    points: item.kind === 'points' ? item.points : undefined,
-    priceFen: item.priceFen,
+    u: userId,
+    i: item.id,
   })
 }
 
@@ -83,6 +79,8 @@ interface ParsedAttach {
 
 function parseAttach(raw: string | undefined): ParsedAttach {
   const attach = JSON.parse(raw ?? '{}') as {
+    u?: string
+    i?: string
     userId?: string
     kind?: PurchaseKind
     itemId?: string
@@ -92,10 +90,10 @@ function parseAttach(raw: string | undefined): ParsedAttach {
     priceFen?: number
   }
 
-  const userId = attach.userId ?? ''
+  const userId = attach.u ?? attach.userId ?? ''
   if (!userId) throw new Error('支付附加数据缺少 userId')
 
-  const itemId = attach.itemId ?? attach.planId ?? ''
+  const itemId = attach.i ?? attach.itemId ?? attach.planId ?? ''
   const catalogItem = itemId ? getPurchaseItem(itemId) : null
   if (catalogItem) return { userId, item: catalogItem }
 

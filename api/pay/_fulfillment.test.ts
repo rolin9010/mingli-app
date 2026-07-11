@@ -18,19 +18,15 @@ test('membership catalog includes the configured points bonuses', () => {
   }
 })
 
-test('membership attach carries server-owned price, duration and bonus', () => {
+test('membership attach stays below WeChat Pay 128-byte limit', () => {
   const item = getPurchaseItem('monthly')
   assert.ok(item)
 
   assert.deepEqual(JSON.parse(buildAttach('user-1', item)), {
-    userId: 'user-1',
-    kind: 'membership',
-    itemId: 'monthly',
-    planId: 'monthly',
-    days: 30,
-    bonusPoints: 3,
-    priceFen: 1800,
+    u: 'user-1',
+    i: 'monthly',
   })
+  assert.ok(Buffer.byteLength(buildAttach('12345678-1234-1234-1234-123456789012', item)) <= 128)
 })
 
 test('points purchases remain separate products in the same catalog', () => {
@@ -39,11 +35,8 @@ test('points purchases remain separate products in the same catalog', () => {
   assert.equal(item.kind, 'points')
 
   assert.deepEqual(JSON.parse(buildAttach('user-1', item)), {
-    userId: 'user-1',
-    kind: 'points',
-    itemId: 'points_22',
-    points: 22,
-    priceFen: 1800,
+    u: 'user-1',
+    i: 'points_22',
   })
 })
 
