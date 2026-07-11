@@ -66,7 +66,8 @@ function TopNav({
   onOpenConsult: () => void
 }) {
   const { balance } = usePoints()
-  const [showPointsModal, setShowPointsModal] = useState(false)
+  const shouldOpenPaymentCheck = new URLSearchParams(window.location.search).has('checkPay')
+  const [showPointsModal, setShowPointsModal] = useState(shouldOpenPaymentCheck)
   const [showUserMenu, setShowUserMenu] = useState(false)
   // 未读客服回复数量
   const [unreadCount, setUnreadCount] = useState(0)
@@ -82,7 +83,7 @@ function TopNav({
   const persistSeen = () => {
     try {
       localStorage.setItem('seen_reply_ids', JSON.stringify([...seenReplyIds.current]))
-    } catch {}
+    } catch { /* ignore localStorage write failures */ }
   }
 
   // 轮询：统计有回复但用户还没看过的消息数
@@ -317,9 +318,12 @@ function WizardApp({ user }: { user: User | null }) {
   // 检测是否从微信小程序 WebView 打开（隐藏顶部导航栏）
   const urlParams = new URLSearchParams(window.location.search)
   const isMiniprogram = urlParams.get('miniprogram') === '1'
-  // 小程序访客历史模式：?miniprogram=1&view=history&uid=<supabase_user_id>
+  // 小程序访客历史/详情模式：?miniprogram=1&view=history&uid=<supabase_user_id>&reading_id=<reading_id>
   const guestHistoryUid = (isMiniprogram && urlParams.get('view') === 'history')
     ? (urlParams.get('uid') ?? '')
+    : ''
+  const guestReadingId = guestHistoryUid
+    ? (urlParams.get('reading_id') ?? urlParams.get('id') ?? '')
     : ''
 
   // 小程序模式：修复各种 WebView 兼容问题
@@ -368,7 +372,11 @@ function WizardApp({ user }: { user: User | null }) {
     return (
       <div className="min-h-screen">
         <div className="pt-4">
-          <HistoryPage onBack={() => { /* webview 里无意义，但接口需要 */ }} guestUid={guestHistoryUid} />
+          <HistoryPage
+            onBack={() => { /* webview 里无意义，但接口需要 */ }}
+            guestUid={guestHistoryUid}
+            initialSelectedId={guestReadingId}
+          />
         </div>
       </div>
     )

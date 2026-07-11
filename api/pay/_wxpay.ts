@@ -3,7 +3,7 @@
  * 商户号：1600342350（直连模式）
  */
 
-import { createSign, createVerify, createHash, createDecipheriv, randomBytes } from 'crypto'
+import { createSign, createVerify, createDecipheriv, randomBytes } from 'crypto'
 
 // ── 环境变量读取 ────────────────────────────────────────────────────────────
 
@@ -41,7 +41,7 @@ export function genOutTradeNo(): string {
 
 export function normalizePem(raw: string): string {
   // 1. 把字面量 \n 换成真实换行
-  let pem = raw.replace(/\\n/g, '\n')
+  const pem = raw.replace(/\\n/g, '\n')
   // 2. 去掉所有现有换行和空白，提取纯 base64 内容
   const beginMatch = pem.match(/-----BEGIN ([^-]+)-----/)
   const endMatch = pem.match(/-----END ([^-]+)-----/)

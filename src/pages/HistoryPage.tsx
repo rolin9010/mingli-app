@@ -85,9 +85,11 @@ export interface HistoryPageProps {
   onBack: () => void
   /** 小程序访客模式：传入 supabase user_id，免登录查看该用户的历史记录（只读） */
   guestUid?: string
+  /** 小程序访客模式：传入当前小程序展示的 readings.id，直接打开该详情 */
+  initialSelectedId?: string
 }
 
-export default function HistoryPage({ onBack, guestUid }: HistoryPageProps) {
+export default function HistoryPage({ onBack, guestUid, initialSelectedId }: HistoryPageProps) {
   /** 是否为小程序访客只读模式 */
   const isGuest = Boolean(guestUid)
   const [list, setList] = useState<ReadingListItem[] | null>(null)
@@ -168,9 +170,18 @@ export default function HistoryPage({ onBack, guestUid }: HistoryPageProps) {
           : await getReadings()
         if (!cancelled) {
           setList(rows)
+          const personalRows = rows.filter((row) => !isHeBanInputData(row.input_data ?? null))
           // 找出已标记的主档案
-          const primary = (rows as (ReadingListItem & { is_primary?: boolean })[]).find(r => r.is_primary)
+          const primary = (personalRows as (ReadingListItem & { is_primary?: boolean })[]).find(r => r.is_primary)
           if (primary) setPrimaryId(primary.id)
+          if (isGuest && initialSelectedId) {
+            const target = personalRows.find(row => row.id === initialSelectedId) ?? primary ?? personalRows[0]
+            if (target) {
+              setSelectedId(target.id)
+            } else {
+              setListError('未找到可查看的个人档案')
+            }
+          }
         }
       } catch (e: unknown) {
         if (!cancelled) setListError(e instanceof Error ? e.message : '加载失败')
@@ -181,7 +192,7 @@ export default function HistoryPage({ onBack, guestUid }: HistoryPageProps) {
     return () => {
       cancelled = true
     }
-  }, [guestUid])
+  }, [guestUid, initialSelectedId, isGuest])
 
   useEffect(() => {
     if (!selectedId) {
@@ -246,8 +257,7 @@ export default function HistoryPage({ onBack, guestUid }: HistoryPageProps) {
         if (cancelled) return
         setComputedError(e instanceof Error ? e.message : '排盘失败')
       } finally {
-        if (cancelled) return
-        setComputedLoading(false)
+        if (!cancelled) setComputedLoading(false)
       }
     })()
     return () => { cancelled = true }
@@ -276,8 +286,7 @@ export default function HistoryPage({ onBack, guestUid }: HistoryPageProps) {
         if (cancelled) return
         setHeBanError(e instanceof Error ? e.message : '排盘失败')
       } finally {
-        if (cancelled) return
-        setHeBanLoading(false)
+        if (!cancelled) setHeBanLoading(false)
       }
     })()
     return () => { cancelled = true }

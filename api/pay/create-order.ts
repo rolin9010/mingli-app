@@ -2,11 +2,12 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import { createSign } from 'crypto'
 import { getWxPayConfig, wxpayRequest, genOutTradeNo, normalizePem } from './_wxpay.js'
+import { buildAttach, getPurchaseItem } from './_fulfillment.js'
 
 /**
  * POST /api/pay/create-order
  *
- * Body: { planId: 'trial'|'monthly'|'quarterly'|'yearly', payType: 'native'|'h5'|'jsapi', openid?: string }
+ * Body: { planId/itemId: string, payType: 'native'|'h5'|'jsapi', openid?: string }
  *
  * 鉴权：Authorization: Bearer <supabase-access-token>
  *
@@ -15,14 +16,6 @@ import { getWxPayConfig, wxpayRequest, genOutTradeNo, normalizePem } from './_wx
  *  h5      → { outTradeNo, h5Url }            （前端跳转 h5Url）
  *  jsapi   → { outTradeNo, jsapiParams }      （小程序调 wx.requestPayment）
  */
-
-// 套餐定义（分）
-const PLANS: Record<string, { label: string; priceFen: number; days: number }> = {
-  trial:     { label: '7天试用会员',  priceFen: 100,   days: 7   },
-  monthly:   { label: '月度会员',    priceFen: 1800,  days: 30  },
-  quarterly: { label: '季度会员',    priceFen: 4800,  days: 90  },
-  yearly:    { label: '年度会员',    priceFen: 12800, days: 365 },
-}
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
   res.setHeader('Access-Control-Allow-Origin', process.env.ALLOWED_ORIGIN ?? '*')
@@ -43,19 +36,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (authErr || !user) return res.status(401).json({ error: '登录已失效' })
 
   // ── 2. 参数 ──
-  const { planId, payType, openid } = req.body as {
+  const { planId, itemId, payType, openid } = req.body as {
     planId?: string
+    itemId?: string
     payType?: 'native' | 'h5' | 'jsapi'
     openid?: string
   }
 
-  if (!planId || !PLANS[planId]) return res.status(400).json({ error: '无效套餐' })
+  const purchaseId = itemId ?? planId ?? ''
+  const item = getPurchaseItem(purchaseId)
+  if (!item) return res.status(400).json({ error: '无效商品' })
   if (!payType || !['native', 'h5', 'jsapi'].includes(payType)) return res.status(400).json({ error: '无效支付类型' })
   if (payType === 'jsapi' && !openid) return res.status(400).json({ error: 'JSAPI 支付需要 openid' })
 
-  const plan = PLANS[planId]!
   const { mchid, notifyUrl } = getWxPayConfig()
   const outTradeNo = genOutTradeNo()
+  const attach = buildAttach(user.id, item)
 
   // ── 3. 调微信下单 ──
   try {
@@ -64,12 +60,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const result = await wxpayRequest<{ code_url: string }>('POST', '/v3/pay/transactions/native', {
         appid: process.env.WX_APPID ?? 'wxce6d9e5883f89cb7',
         mchid,
-        description: `五行明理 - ${plan.label}`,
+        description: `五行明理 - ${item.label}`,
         out_trade_no: outTradeNo,
         notify_url: notifyUrl,
-        amount: { total: plan.priceFen, currency: 'CNY' },
-        // 附加自定义数据，回调时用于识别
-        attach: JSON.stringify({ userId: user.id, planId, days: plan.days }),
+        amount: { total: item.priceFen, currency: 'CNY' },
+        attach,
       })
 
       return res.status(200).json({ outTradeNo, codeUrl: result.code_url })
@@ -79,15 +74,15 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const result = await wxpayRequest<{ h5_url: string }>('POST', '/v3/pay/transactions/h5', {
         appid: process.env.WX_APPID ?? 'wxce6d9e5883f89cb7',
         mchid,
-        description: `五行明理 - ${plan.label}`,
+        description: `五行明理 - ${item.label}`,
         out_trade_no: outTradeNo,
         notify_url: notifyUrl,
-        amount: { total: plan.priceFen, currency: 'CNY' },
+        amount: { total: item.priceFen, currency: 'CNY' },
         scene_info: {
           payer_client_ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0] ?? '127.0.0.1',
           h5_info: { type: 'Wap', app_name: '五行明理', app_url: 'https://wuxingme.cn' },
         },
-        attach: JSON.stringify({ userId: user.id, planId, days: plan.days }),
+        attach,
       })
 
       return res.status(200).json({ outTradeNo, h5Url: result.h5_url })
@@ -97,12 +92,12 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const result = await wxpayRequest<{ prepay_id: string }>('POST', '/v3/pay/transactions/jsapi', {
         appid: process.env.WX_MINI_APPID ?? 'wxf1d2e889d05100bb',
         mchid,
-        description: `五行明理 - ${plan.label}`,
+        description: `五行明理 - ${item.label}`,
         out_trade_no: outTradeNo,
         notify_url: notifyUrl,
-        amount: { total: plan.priceFen, currency: 'CNY' },
+        amount: { total: item.priceFen, currency: 'CNY' },
         payer: { openid },
-        attach: JSON.stringify({ userId: user.id, planId, days: plan.days }),
+        attach,
       })
 
       // 构造小程序调起支付所需参数

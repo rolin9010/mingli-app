@@ -1,6 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { getWxPayConfig, wxpayRequest } from './_wxpay'
+import { getWxPayConfig, wxpayRequest } from './_wxpay.js'
+import { fulfillPaidOrder, getFulfillmentStateForUser } from './_fulfillment.js'
 
 /**
  * GET /api/pay/query-order?outTradeNo=xxx
@@ -8,7 +9,7 @@ import { getWxPayConfig, wxpayRequest } from './_wxpay'
  * 前端轮询用：查询订单支付状态
  * 鉴权：Authorization: Bearer <token>
  *
- * 返回：{ tradeState: 'SUCCESS'|'NOTPAY'|'...' , isMember: boolean }
+ * 返回：{ tradeState: 'SUCCESS'|'NOTPAY'|'...' , isMember: boolean, pointsCredited: boolean }
  */
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
@@ -36,27 +37,39 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const { mchid } = getWxPayConfig()
 
     // 查询微信侧订单状态
-    const result = await wxpayRequest<{ trade_state: string }>(
+    const result = await wxpayRequest<{
+      trade_state: string
+      attach?: string
+      amount?: { total?: number }
+    }>(
       'GET',
       `/v3/pay/transactions/out-trade-no/${outTradeNo}?mchid=${mchid}`,
     )
 
     const tradeState = result.trade_state
+    let fulfillment = await getFulfillmentStateForUser(supabase, user.id, outTradeNo)
+    let points = 0
 
-    // 如果已支付，检查会员是否已写入
-    let isMember = false
     if (tradeState === 'SUCCESS') {
-      const now = new Date().toISOString()
-      const { data } = await supabase
-        .from('memberships')
-        .select('id')
-        .eq('user_id', user.id)
-        .gt('expires_at', now)
-        .maybeSingle()
-      isMember = !!data
+      const fulfilled = await fulfillPaidOrder(supabase, {
+        outTradeNo,
+        tradeState,
+        amountFen: result.amount?.total,
+        attach: result.attach,
+      }, user.id)
+      fulfillment = {
+        isMember: fulfilled.isMember || fulfillment.isMember,
+        pointsCredited: fulfilled.pointsCredited || fulfillment.pointsCredited,
+      }
+      points = fulfilled.points
     }
 
-    return res.status(200).json({ tradeState, isMember })
+    return res.status(200).json({
+      tradeState,
+      isMember: fulfillment.isMember,
+      pointsCredited: fulfillment.pointsCredited,
+      points,
+    })
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '查询失败'
     console.error('query-order error:', msg)

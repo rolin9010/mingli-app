@@ -102,6 +102,7 @@ export const MEMBERSHIP_PLANS = [
     price: '¥1',
     priceFen: 100,          // 单位：分
     duration: 7,            // 天
+    bonusPoints: 1,
     badge: '新人专享',
     highlight: true,
   },
@@ -111,6 +112,7 @@ export const MEMBERSHIP_PLANS = [
     price: '¥18',
     priceFen: 1800,
     duration: 30,
+    bonusPoints: 3,
     badge: null,
     highlight: false,
   },
@@ -120,6 +122,7 @@ export const MEMBERSHIP_PLANS = [
     price: '¥48',
     priceFen: 4800,
     duration: 90,
+    bonusPoints: 8,
     badge: '推荐',
     highlight: false,
   },
@@ -129,6 +132,7 @@ export const MEMBERSHIP_PLANS = [
     price: '¥128',
     priceFen: 12800,
     duration: 365,
+    bonusPoints: 22,
     badge: '最划算',
     highlight: false,
   },

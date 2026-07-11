@@ -12,38 +12,54 @@ async function getToken(): Promise<string | null> {
   return session?.access_token ?? null
 }
 
-async function createOrder(planId: string, payType: 'native' | 'h5') {
+async function createOrder(itemId: string, payType: 'native' | 'h5') {
   const token = await getToken()
   if (!token) throw new Error('未登录')
   const res = await fetch('/api/pay/create-order', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
-    body: JSON.stringify({ planId, payType }),
+    body: JSON.stringify({ itemId, payType }),
   })
   const data = await res.json() as { error?: string; outTradeNo?: string; codeUrl?: string; h5Url?: string }
   if (!res.ok) throw new Error(data.error ?? '下单失败')
   return data
 }
 
-async function queryOrder(outTradeNo: string): Promise<{ tradeState: string; isMember: boolean }> {
+async function queryOrder(outTradeNo: string): Promise<{
+  tradeState: string
+  isMember: boolean
+  pointsCredited: boolean
+  points: number
+}> {
   const token = await getToken()
   if (!token) throw new Error('未登录')
   const res = await fetch(`/api/pay/query-order?outTradeNo=${outTradeNo}`, {
     headers: { 'Authorization': `Bearer ${token}` },
   })
-  const data = await res.json() as { tradeState?: string; isMember?: boolean; error?: string }
+  const data = await res.json() as {
+    tradeState?: string
+    isMember?: boolean
+    pointsCredited?: boolean
+    points?: number
+    error?: string
+  }
   if (!res.ok) throw new Error(data.error ?? '查询失败')
-  return { tradeState: data.tradeState ?? 'NOTPAY', isMember: data.isMember ?? false }
+  return {
+    tradeState: data.tradeState ?? 'NOTPAY',
+    isMember: data.isMember ?? false,
+    pointsCredited: data.pointsCredited ?? false,
+    points: data.points ?? 0,
+  }
 }
 
 // ─── 常规购买套餐（积分充值） ─────────────────────────────────────────────────
 const RECHARGE_PACKS = [
-  { points: 3,   price: '¥3',   unit: '1.00' },
-  { points: 8,   price: '¥7',   unit: '0.88' },
-  { points: 22,  price: '¥18',  unit: '0.82' },
-  { points: 38,  price: '¥30',  unit: '0.79' },
-  { points: 90,  price: '¥68',  unit: '0.76' },
-  { points: 180, price: '¥128', unit: '0.71' },
+  { id: 'points_3',   points: 3,   price: '¥3',   unit: '1.00' },
+  { id: 'points_8',   points: 8,   price: '¥7',   unit: '0.88' },
+  { id: 'points_22',  points: 22,  price: '¥18',  unit: '0.82' },
+  { id: 'points_38',  points: 38,  price: '¥30',  unit: '0.79' },
+  { id: 'points_90',  points: 90,  price: '¥68',  unit: '0.76' },
+  { id: 'points_180', points: 180, price: '¥128', unit: '0.71' },
 ]
 
 // ─── 4 个 Tab ────────────────────────────────────────────────────────────────
@@ -109,7 +125,7 @@ function CoinIcon({ size = 'md' }: { size?: 'sm' | 'md' | 'lg' }) {
 
 // ─── 主弹窗 ──────────────────────────────────────────────────────────────────
 export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: PointsModalProps) {
-  const { balance, checkedInToday, loading, doCheckIn, records } = usePoints()
+  const { balance, checkedInToday, loading, doCheckIn, records, refresh } = usePoints()
   const [tab, setTab] = useState<TabKey>(defaultTab)
   const [checkingIn, setCheckingIn] = useState(false)
 
@@ -117,9 +133,6 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
   const [inviteStats, setInviteStats] = useState<{ count: number; totalPoints: number } | null>(null)
   const [inviteLink, setInviteLink] = useState<string>('')
   const [copied, setCopied] = useState(false)
-
-  // 购买 toast（积分充值占位）
-  const [buyToast, setBuyToast] = useState(false)
 
   // 会员状态
   const [memberInfo, setMemberInfo] = useState<MembershipInfo | null>(null)
@@ -129,14 +142,10 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
   const [payState, setPayState] = useState<'idle' | 'creating' | 'polling' | 'success' | 'error'>('idle')
   const [payError, setPayError] = useState('')
   const [codeUrl, setCodeUrl] = useState('')           // Native 二维码 URL
-  const [_currentTradeNo, setCurrentTradeNo] = useState('')
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null)
-  const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null)
-  const [isWxBrowser, setIsWxBrowser] = useState(false)
-
-  useEffect(() => {
-    setIsWxBrowser(/MicroMessenger/i.test(navigator.userAgent))
-  }, [])
+  const [selectedItemId, setSelectedItemId] = useState<string | null>(null)
+  const [selectedPayLabel, setSelectedPayLabel] = useState('微信支付')
+  const [successMessage, setSuccessMessage] = useState('权益已到账')
 
   const stopPolling = useCallback(() => {
     if (pollTimerRef.current) {
@@ -148,6 +157,50 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
   useEffect(() => {
     return () => stopPolling()
   }, [stopPolling])
+
+  const handleSuccessfulPayment = useCallback(async (result: Awaited<ReturnType<typeof queryOrder>>) => {
+    if (result.pointsCredited) {
+      await refresh()
+      setSuccessMessage(result.points > 0 ? `${result.points} 积分已到账` : '积分已到账')
+    }
+
+    if (result.isMember) {
+      clearMembershipCache()
+      const info = await getMembershipInfo(true)
+      setMemberInfo(info)
+      setSuccessMessage(
+        result.pointsCredited && result.points > 0
+          ? `会员已开通，另赠 ${result.points} 积分`
+          : '会员已开通，每日专属贴士已解锁',
+      )
+    }
+
+    setPayState('success')
+  }, [refresh])
+
+  const beginOrderPolling = useCallback((outTradeNo: string) => {
+    let tries = 0
+    const check = async () => {
+      tries++
+      if (tries > 40) {
+        stopPolling()
+        setPayState('error')
+        setPayError('支付码已超时，请重新生成')
+        return
+      }
+
+      try {
+        const result = await queryOrder(outTradeNo)
+        if (result.tradeState === 'SUCCESS' && (result.isMember || result.pointsCredited)) {
+          stopPolling()
+          await handleSuccessfulPayment(result)
+        }
+      } catch { /* 继续轮询，短暂网络错误不打断支付 */ }
+    }
+
+    void check()
+    pollTimerRef.current = setInterval(() => void check(), 3000)
+  }, [handleSuccessfulPayment, stopPolling])
 
   // H5 支付跳回后，检查 URL 里的 checkPay 参数
   useEffect(() => {
@@ -161,7 +214,8 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
     window.history.replaceState({}, '', newUrl)
 
     setPayState('polling')
-    setSelectedPlanId(null)
+    setSelectedItemId(null)
+    setSelectedPayLabel('微信支付')
 
     // 轮询最多 10 次（30秒）
     let tries = 0
@@ -174,16 +228,14 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
         return
       }
       try {
-        const { tradeState, isMember } = await queryOrder(tradeNo)
-        if (tradeState === 'SUCCESS' || isMember) {
+        const result = await queryOrder(tradeNo)
+        if (result.tradeState === 'SUCCESS' && (result.isMember || result.pointsCredited)) {
           clearInterval(timer)
-          clearMembershipCache()
-          getMembershipInfo(true).then(setMemberInfo)
-          setPayState('success')
+          void handleSuccessfulPayment(result)
         }
       } catch { /* 继续轮询 */ }
     }, 3000)
-  }, [open])
+  }, [open, handleSuccessfulPayment])
 
   // 打开时加载邀请数据 + 会员状态
   useEffect(() => {
@@ -207,42 +259,45 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
     setCheckingIn(false)
   }
 
-  const handleBuyClick = () => {
-    setBuyToast(true)
-    setTimeout(() => setBuyToast(false), 3000)
-  }
-
-  // 会员套餐购买
-  const handleMemberPlanClick = async (planId: string) => {
-    setSelectedPlanId(planId)
+  const startPayment = async (itemId: string, label: string) => {
+    setSelectedItemId(itemId)
+    setSelectedPayLabel(label)
     setPayState('creating')
     setPayError('')
     setCodeUrl('')
+    setSuccessMessage('权益已到账')
     stopPolling()
 
     try {
-      // 统一使用 H5 支付（小微商户不支持 Native 扫码）
-      const result = await createOrder(planId, 'h5')
+      // 当前商户为小微商户：微信官方支持 Native，H5 产品权限不可申请。
+      const result = await createOrder(itemId, 'native')
 
-      if (result.h5Url) {
-        // H5：跳转到微信支付页面，支付完跳回
-        const returnUrl = encodeURIComponent(`${window.location.origin}${window.location.pathname}?checkPay=${result.outTradeNo}`)
-        window.location.href = `${result.h5Url}&redirect_url=${returnUrl}`
-        setCurrentTradeNo(result.outTradeNo!)
+      if (result.codeUrl && result.outTradeNo) {
+        setCodeUrl(result.codeUrl)
         setPayState('polling')
+        beginOrderPolling(result.outTradeNo)
         return
       }
+
+      throw new Error('未生成微信支付码')
     } catch (e: unknown) {
       setPayState('error')
       setPayError(e instanceof Error ? e.message : '创建订单失败')
     }
   }
 
+  // 会员套餐购买
+  const handleMemberPlanClick = async (planId: string) => {
+    const plan = MEMBERSHIP_PLANS.find((p) => p.id === planId)
+    await startPayment(planId, plan ? `${plan.label} ${plan.price}` : '会员')
+  }
+
   const handlePayClose = () => {
     stopPolling()
     setPayState('idle')
     setCodeUrl('')
-    setSelectedPlanId(null)
+    setSelectedItemId(null)
+    setSelectedPayLabel('微信支付')
   }
 
   const handleCopy = async () => {
@@ -254,17 +309,6 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
 
   return (
     <>
-      {/* 悬浮 Toast：积分充值占位提示 */}
-      {createPortal(
-        <div className={`fixed bottom-8 left-1/2 -translate-x-1/2 z-[9999] flex items-center gap-2 rounded-2xl border border-amber-400/40 bg-[#1a1200] px-4 py-2.5 text-xs font-medium text-amber-200 shadow-lg shadow-black/40 transition-all duration-300 ${
-          buyToast ? 'opacity-100 translate-y-0' : 'opacity-0 translate-y-2 pointer-events-none'
-        }`}>
-          <svg className="h-3.5 w-3.5 shrink-0 text-amber-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
-          积分充值购买链路建设中，请稍后再来～
-        </div>,
-        document.body
-      )}
-
       {/* ── 会员支付弹窗（Portal 渲染，层级高于 PointsModal） ── */}
       {payState !== 'idle' && createPortal(
         <div className="fixed inset-0 z-[400] flex items-center justify-center p-4">
@@ -281,10 +325,7 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
 
             {/* 套餐名称 */}
             <p className="mb-4 text-center text-sm font-semibold text-slate-200">
-              {MEMBERSHIP_PLANS.find(p => p.id === selectedPlanId)?.label ?? '会员'}
-              <span className="ml-2 text-amber-300">
-                {MEMBERSHIP_PLANS.find(p => p.id === selectedPlanId)?.price}
-              </span>
+              {selectedPayLabel}
             </p>
 
             {/* 创建中 */}
@@ -333,7 +374,7 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                   </svg>
                 </div>
                 <p className="text-sm font-semibold text-slate-200">支付成功！</p>
-                <p className="text-xs text-slate-400">会员已开通，每日专属贴士已解锁</p>
+                <p className="text-xs text-slate-400">{successMessage}</p>
                 <button type="button" onClick={handlePayClose}
                   className="mt-2 w-full rounded-xl bg-amber-400/20 border border-amber-400/30 py-2 text-sm font-medium text-amber-200 hover:bg-amber-400/30 transition-colors">
                   开始使用
@@ -352,7 +393,7 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                 <p className="text-sm font-semibold text-slate-200">支付失败</p>
                 <p className="text-xs text-slate-400 text-center">{payError}</p>
                 <button type="button"
-                  onClick={() => selectedPlanId && handleMemberPlanClick(selectedPlanId)}
+                  onClick={() => selectedItemId && startPayment(selectedItemId, selectedPayLabel)}
                   className="mt-2 w-full rounded-xl bg-amber-400/20 border border-amber-400/30 py-2 text-sm font-medium text-amber-200 hover:bg-amber-400/30 transition-colors">
                   重新尝试
                 </button>
@@ -574,12 +615,13 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                       <div className={`text-lg font-bold ${plan.highlight ? 'text-amber-300' : 'text-amber-300'}`}>{plan.price}</div>
                       <div className="mt-0.5 text-xs font-medium text-slate-200">{plan.label}</div>
                       <div className="mt-0.5 text-[10px] text-slate-500">{plan.duration} 天</div>
+                      <div className="mt-1 text-[10px] text-amber-300/80">赠 {plan.bonusPoints} 积分</div>
                     </button>
                   ))}
                 </div>
 
                 <p className="mt-2 text-[10px] text-slate-600 leading-relaxed">
-                  会员权益：每日根据你的八字五行生成专属建议，每天自动刷新 · 会员期内无限查看
+                  会员权益：每日根据你的八字五行生成专属建议，每天自动刷新 · 会员期内无限查看 · 购买即赠积分
                 </p>
               </div>
 
@@ -596,7 +638,7 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                   <button
                     key={pack.points}
                     type="button"
-                    onClick={handleBuyClick}
+                    onClick={() => void startPayment(pack.id, `${pack.points} 积分 ${pack.price}`)}
                     className="relative flex flex-col rounded-2xl border border-[#333] bg-[#1a1a1a] p-3 text-left transition-all hover:border-amber-400/30 hover:bg-[#1e1e1e] active:scale-[0.98]"
                   >
                     <CoinIcon size="sm" />

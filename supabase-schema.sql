@@ -109,6 +109,7 @@ create table if not exists points_records (
   type        text not null,   -- 'recharge'|'checkin'|'invite'|'consume_ai'|'consume_heban'|'consume_daily'|'reward'
   amount      int  not null,
   description text not null,
+  order_id    text,            -- 支付订单号（微信支付 out_trade_no，仅支付充值使用）
   created_at  timestamptz default now()
 );
 
@@ -118,6 +119,59 @@ create policy "用户只能读写自己的积分记录"
   on points_records for all
   using (auth.uid() = user_id)
   with check (auth.uid() = user_id);
+
+create unique index if not exists points_records_order_id_key
+  on points_records (order_id)
+  where order_id is not null;
+
+-- 支付履约专用：在一个事务内写积分流水并累加余额。
+-- 仅服务端 service_role 可调用，避免客户端伪造充值或会员赠分。
+create or replace function public.credit_points_once(
+  p_user_id uuid,
+  p_amount int,
+  p_type text,
+  p_description text,
+  p_order_id text
+)
+returns boolean
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_inserted int;
+begin
+  if p_amount <= 0 then
+    raise exception '积分数量必须大于 0';
+  end if;
+
+  if p_type not in ('recharge', 'reward') then
+    raise exception '不支持的积分类型: %', p_type;
+  end if;
+
+  insert into public.points_records (user_id, type, amount, description, order_id)
+  values (p_user_id, p_type, p_amount, p_description, p_order_id)
+  on conflict (order_id) where order_id is not null do nothing;
+
+  get diagnostics v_inserted = row_count;
+  if v_inserted = 0 then
+    return false;
+  end if;
+
+  insert into public.user_points (user_id, balance, check_in_streak, last_check_in)
+  values (p_user_id, p_amount, 0, null)
+  on conflict (user_id) do update
+    set balance = public.user_points.balance + excluded.balance,
+        updated_at = now();
+
+  return true;
+end;
+$$;
+
+revoke all on function public.credit_points_once(uuid, int, text, text, text)
+  from public, anon, authenticated;
+grant execute on function public.credit_points_once(uuid, int, text, text, text)
+  to service_role;
 
 -- ── 邀请关系表 ────────────────────────────────────────────────────────────────
 create table if not exists invites (
@@ -241,6 +295,10 @@ create policy "管理员可读所有会员记录"
 -- 索引
 create index if not exists memberships_user_id_expires_at_idx
   on memberships (user_id, expires_at desc);
+
+create unique index if not exists memberships_order_id_key
+  on memberships (order_id)
+  where order_id is not null;
 
 -- ── binding_codes 表（微信小程序绑定码）────────────────────────────────────────
 -- 如果之前没有建过，在此补充
