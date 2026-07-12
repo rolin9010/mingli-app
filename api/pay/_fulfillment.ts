@@ -22,7 +22,7 @@ interface PointsPack {
 export type PurchaseItem = MembershipPlan | PointsPack
 
 export const MEMBERSHIP_PLANS: Record<string, MembershipPlan> = {
-  trial:     { kind: 'membership', id: 'trial',     label: '7天试用会员', priceFen: 100,   days: 7,   bonusPoints: 1  },
+  trial:     { kind: 'membership', id: 'trial',     label: '7天试用会员', priceFen: 1,     days: 7,   bonusPoints: 1  },
   monthly:   { kind: 'membership', id: 'monthly',   label: '月度会员',   priceFen: 1800,  days: 30,  bonusPoints: 3  },
   quarterly: { kind: 'membership', id: 'quarterly', label: '季度会员',   priceFen: 4800,  days: 90,  bonusPoints: 8  },
   yearly:    { kind: 'membership', id: 'yearly',    label: '年度会员',   priceFen: 12800, days: 365, bonusPoints: 22 },

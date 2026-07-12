@@ -216,7 +216,7 @@ export default function DailyTip({
               onClick={onOpenMembership}
               className="shrink-0 rounded-lg border border-amber-400/50 bg-amber-400/15 px-3 py-1.5 text-[11px] font-semibold text-amber-100 hover:bg-amber-400/25 transition-colors whitespace-nowrap"
             >
-              ¥1 试用7天 →
+              ¥0.01 试用7天 →
             </button>
           </div>
         </>

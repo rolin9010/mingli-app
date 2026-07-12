@@ -18,6 +18,12 @@ test('membership catalog includes the configured points bonuses', () => {
   }
 })
 
+test('trial membership charges one fen', () => {
+  const item = getPurchaseItem('trial')
+  assert.ok(item)
+  assert.equal(item.priceFen, 1)
+})
+
 test('membership attach stays below WeChat Pay 128-byte limit', () => {
   const item = getPurchaseItem('monthly')
   assert.ok(item)
