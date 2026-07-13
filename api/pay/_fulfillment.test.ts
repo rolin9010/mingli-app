@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { buildAttach, getPurchaseItem } from './_fulfillment.js'
+import { buildAttach, getPurchaseEligibilityError, getPurchaseItem } from './_fulfillment.js'
 
 test('membership catalog includes the configured points bonuses', () => {
   const expected = {
@@ -22,6 +22,17 @@ test('trial membership charges one fen', () => {
   const item = getPurchaseItem('trial')
   assert.ok(item)
   assert.equal(item.priceFen, 1)
+})
+
+test('trial membership can only be purchased once per account', () => {
+  const trial = getPurchaseItem('trial')
+  const monthly = getPurchaseItem('monthly')
+
+  assert.ok(trial)
+  assert.ok(monthly)
+  assert.equal(getPurchaseEligibilityError(trial, false), null)
+  assert.equal(getPurchaseEligibilityError(trial, true), '7天新人试用仅限首次购买')
+  assert.equal(getPurchaseEligibilityError(monthly, true), null)
 })
 
 test('membership attach stays below WeChat Pay 128-byte limit', () => {

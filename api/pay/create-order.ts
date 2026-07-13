@@ -2,7 +2,7 @@ import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
 import { createSign } from 'crypto'
 import { getWxPayConfig, wxpayRequest, genOutTradeNo, normalizePem } from './_wxpay.js'
-import { buildAttach, getPurchaseItem } from './_fulfillment.js'
+import { buildAttach, getPurchaseEligibilityError, getPurchaseItem } from './_fulfillment.js'
 
 /**
  * POST /api/pay/create-order
@@ -48,6 +48,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   if (!item) return res.status(400).json({ error: '无效商品' })
   if (!payType || !['native', 'h5', 'jsapi'].includes(payType)) return res.status(400).json({ error: '无效支付类型' })
   if (payType === 'jsapi' && !openid) return res.status(400).json({ error: 'JSAPI 支付需要 openid' })
+
+  if (item.kind === 'membership' && item.id === 'trial') {
+    const { data: usedTrial, error: eligibilityError } = await supabase
+      .from('memberships')
+      .select('id')
+      .eq('user_id', user.id)
+      .eq('plan', 'trial')
+      .limit(1)
+      .maybeSingle()
+
+    if (eligibilityError) {
+      console.error('trial eligibility check error:', eligibilityError.message)
+      return res.status(500).json({ error: '暂时无法确认试用资格，请稍后重试' })
+    }
+
+    const purchaseEligibilityError = getPurchaseEligibilityError(item, !!usedTrial)
+    if (purchaseEligibilityError) {
+      return res.status(409).json({ error: purchaseEligibilityError })
+    }
+  }
 
   const { mchid, notifyUrl } = getWxPayConfig()
   const outTradeNo = genOutTradeNo()

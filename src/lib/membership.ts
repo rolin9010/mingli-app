@@ -9,11 +9,13 @@ export interface MembershipInfo {
   isMember: boolean
   plan: string | null       // 'trial' | 'monthly' | 'quarterly' | 'yearly'
   expiresAt: Date | null
+  /** 是否曾经购买过新人试用（终身仅一次） */
+  hasUsedTrial: boolean
   /** 距到期剩余天数（非会员为 null） */
   daysLeft: number | null
 }
 
-const CACHE_KEY = 'membership_cache'
+const CACHE_KEY = 'membership_cache_v2'
 const CACHE_TTL_MS = 5 * 60 * 1000  // 5 分钟内不重复请求
 
 interface CacheEntry {
@@ -50,7 +52,13 @@ export function clearMembershipCache(): void {
 
 /** 查询当前登录用户的会员状态，带 5 分钟本地缓存 */
 export async function getMembershipInfo(forceRefresh = false): Promise<MembershipInfo> {
-  const NOT_MEMBER: MembershipInfo = { isMember: false, plan: null, expiresAt: null, daysLeft: null }
+  const NOT_MEMBER: MembershipInfo = {
+    isMember: false,
+    plan: null,
+    expiresAt: null,
+    daysLeft: null,
+    hasUsedTrial: false,
+  }
 
   if (!forceRefresh) {
     const cached = readCache()
@@ -60,29 +68,38 @@ export async function getMembershipInfo(forceRefresh = false): Promise<Membershi
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NOT_MEMBER
 
-  const now = new Date().toISOString()
   const { data, error } = await supabase
     .from('memberships')
     .select('plan, expires_at')
     .eq('user_id', user.id)
-    .gt('expires_at', now)
     .order('expires_at', { ascending: false })
-    .limit(1)
-    .maybeSingle()
 
   if (error || !data) {
     writeCache(NOT_MEMBER)
     return NOT_MEMBER
   }
 
-  const expiresAt = new Date(data.expires_at as string)
+  const hasUsedTrial = data.some((membership) => membership.plan === 'trial')
+  const now = Date.now()
+  const activeMembership = data.find(
+    (membership) => new Date(membership.expires_at as string).getTime() > now,
+  )
+
+  if (!activeMembership) {
+    const info = { ...NOT_MEMBER, hasUsedTrial }
+    writeCache(info)
+    return info
+  }
+
+  const expiresAt = new Date(activeMembership.expires_at as string)
   const daysLeft = Math.ceil((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
 
   const info: MembershipInfo = {
     isMember: true,
-    plan: data.plan as string,
+    plan: activeMembership.plan as string,
     expiresAt,
     daysLeft,
+    hasUsedTrial,
   }
   writeCache(info)
   return info

@@ -103,7 +103,7 @@ export default function DailyTip({
       setMembership(info)
       setMemberChecked(true)
     }).catch(() => {
-      setMembership({ isMember: false, plan: null, expiresAt: null, daysLeft: null })
+      setMembership({ isMember: false, plan: null, expiresAt: null, daysLeft: null, hasUsedTrial: false })
       setMemberChecked(true)
     })
   }, [])
@@ -131,7 +131,7 @@ export default function DailyTip({
         const msg = e instanceof Error ? e.message : '生成失败'
         // 如果是非会员错误，让会员检查结果兜底
         if (msg.includes('NOT_MEMBER') || msg.includes('需要开通会员')) {
-          setMembership({ isMember: false, plan: null, expiresAt: null, daysLeft: null })
+          setMembership({ isMember: false, plan: null, expiresAt: null, daysLeft: null, hasUsedTrial: false })
         } else {
           setError(msg)
           setPhase('error')

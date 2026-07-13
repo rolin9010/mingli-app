@@ -41,6 +41,16 @@ export function getPurchaseItem(itemId: string): PurchaseItem | null {
   return MEMBERSHIP_PLANS[itemId] ?? POINT_PACKS[itemId] ?? null
 }
 
+export function getPurchaseEligibilityError(
+  item: PurchaseItem,
+  hasUsedTrial: boolean,
+): string | null {
+  if (item.kind === 'membership' && item.id === 'trial' && hasUsedTrial) {
+    return '7天新人试用仅限首次购买'
+  }
+  return null
+}
+
 function isUniqueViolation(error: unknown): boolean {
   return typeof error === 'object'
     && error !== null

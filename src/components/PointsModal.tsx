@@ -589,7 +589,9 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
-                  {MEMBERSHIP_PLANS.map((plan) => (
+                  {MEMBERSHIP_PLANS.filter(
+                    (plan) => plan.id !== 'trial' || memberInfo?.hasUsedTrial === false,
+                  ).map((plan) => (
                     <button
                       key={plan.id}
                       type="button"
