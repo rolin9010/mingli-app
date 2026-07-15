@@ -63,6 +63,24 @@ create policy "管理员可读所有测算记录"
   on readings for select
   using (auth.email() = 'rolin9010@foxmail.com');
 
+-- auth.users 管理视图安全加固：
+-- 这些视图只能由服务端 service_role 使用，不能暴露给 anon/authenticated。
+-- 管理后台应通过 /api/admin/users 读取 auth.users，而不是让浏览器直连这些视图。
+do $$
+begin
+  if to_regclass('public.admin_users_view') is not null then
+    alter view public.admin_users_view set (security_invoker = true);
+    revoke all privileges on table public.admin_users_view from anon, authenticated, public;
+    grant select on table public.admin_users_view to service_role;
+  end if;
+
+  if to_regclass('public.admin_user_count') is not null then
+    alter view public.admin_user_count set (security_invoker = true);
+    revoke all privileges on table public.admin_user_count from anon, authenticated, public;
+    grant select on table public.admin_user_count to service_role;
+  end if;
+end $$;
+
 -- user_points：管理员可读写所有用户积分
 create policy "管理员可读所有用户积分"
   on user_points for select

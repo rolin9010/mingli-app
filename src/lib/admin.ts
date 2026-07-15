@@ -81,6 +81,12 @@ export interface AdminStats {
   dailyRegistrations: { date: string; count: number }[]
 }
 
+interface AdminAuthUser {
+  id: string
+  email: string
+  created_at: string
+}
+
 // ─── 鉴权 ─────────────────────────────────────────────────────────────────────
 
 /** 判断当前用户是否是管理员 */
@@ -91,16 +97,46 @@ export function isAdminEmail(email: string | undefined): boolean {
   return raw.split(',').map((e) => e.trim().toLowerCase()).includes(email.toLowerCase())
 }
 
+async function adminApiToken(): Promise<string | null> {
+  const { data: { session } } = await supabase.auth.getSession()
+  return session?.access_token ?? null
+}
+
+async function adminFetchAuthUsers(ids?: string[]): Promise<AdminAuthUser[]> {
+  const token = await adminApiToken()
+  if (!token) return []
+
+  const params = new URLSearchParams()
+  if (ids && ids.length > 0) params.set('ids', ids.join(','))
+
+  const res = await fetch(`/api/admin/users${params.toString() ? `?${params}` : ''}`, {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) return []
+
+  const data = await res.json() as { users?: AdminAuthUser[] }
+  return data.users ?? []
+}
+
+async function adminFetchAuthUserCount(): Promise<number | null> {
+  const token = await adminApiToken()
+  if (!token) return null
+
+  const res = await fetch('/api/admin/users?countOnly=1', {
+    headers: { Authorization: `Bearer ${token}` },
+  })
+  if (!res.ok) return null
+
+  const data = await res.json() as { total?: number }
+  return typeof data.total === 'number' ? data.total : null
+}
+
 // ─── 用户管理 ─────────────────────────────────────────────────────────────────
 
 /** 获取用户列表（含积分余额和测算次数） */
 export async function adminGetUsers(): Promise<AdminUser[]> {
-  // 从 admin_users_view 查所有用户（需要在 Supabase 建视图）
-  const [usersRes, pointsRes, readingsRes] = await Promise.all([
-    supabase
-      .from('admin_users_view')
-      .select('id, email, created_at')
-      .order('created_at', { ascending: false }),
+  const [authUsers, pointsRes, readingsRes] = await Promise.all([
+    adminFetchAuthUsers(),
     supabase
       .from('user_points')
       .select('user_id, balance'),
@@ -118,15 +154,15 @@ export async function adminGetUsers(): Promise<AdminUser[]> {
 
   const pointsMap = new Map((pointsRes.data ?? []).map((p) => [p.user_id as string, p.balance as number]))
 
-  // 如果视图查询成功，直接用视图数据（最准确）
-  if (usersRes.data && usersRes.data.length > 0) {
-    return (usersRes.data as { id: string; email: string; created_at: string }[]).map((u) => ({
+  // 如果管理员 API 查询成功，直接用 auth.users 数据（最准确）
+  if (authUsers.length > 0) {
+    return authUsers.map((u) => ({
       id: u.id,
       email: u.email ?? '(未知)',
       created_at: u.created_at,
       balance: pointsMap.get(u.id) ?? 0,
       readingCount: readingCountMap.get(u.id) ?? 0,
-    }))
+    })).sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
   }
 
   // 兜底：从 readings 表里的 user_email 聚合（老方案）
@@ -174,22 +210,18 @@ export async function adminGetUserDetail(userId: string): Promise<AdminUserDetai
       .select('id, name, birth_date, created_at, input_data, ai_report, user_email')
       .eq('user_id', userId)
       .order('created_at', { ascending: false }),
-    // 从视图读邮箱（最准确，覆盖老数据）
-    supabase
-      .from('admin_users_view')
-      .select('email, created_at')
-      .eq('id', userId)
-      .single(),
+    adminFetchAuthUsers([userId]),
   ])
 
-  // 优先用视图里的邮箱，其次读 readings 里的 user_email
+  const authUser = userRes[0]
+  // 优先用 Auth 用户邮箱，其次读 readings 里的 user_email
   const email =
-    (userRes.data as { email?: string } | null)?.email ??
+    authUser?.email ??
     (readingsRes.data?.[0] as { user_email?: string } | undefined)?.user_email ??
     '(未知)'
 
   const createdAt =
-    (userRes.data as { created_at?: string } | null)?.created_at ??
+    authUser?.created_at ??
     readingsRes.data?.[0]?.created_at ?? ''
 
   return {
@@ -281,8 +313,8 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
   // 并行查：邮箱、积分、最近一条测算
   const [emailViewRes, readingsRes, pointsRes] = await Promise.all([
     allUserIds.length > 0
-      ? supabase.from('admin_users_view').select('id, email').in('id', allUserIds)
-      : Promise.resolve({ data: [] }),
+      ? adminFetchAuthUsers(allUserIds)
+      : Promise.resolve([]),
     allUserIds.length > 0
       ? supabase
           .from('readings')
@@ -296,7 +328,7 @@ export async function adminGetSessions(): Promise<AdminSession[]> {
   ])
 
   const emailMap = new Map<string, string>()
-  for (const r of (emailViewRes.data ?? []) as { id: string; email: string }[]) {
+  for (const r of emailViewRes) {
     if (r.id && r.email) emailMap.set(r.id, r.email)
   }
   // 兜底：从 readings 里补充邮箱
@@ -461,7 +493,7 @@ export async function adminGetStats(): Promise<AdminStats> {
   }
   const sevenDaysAgo = days[0] + 'T00:00:00.000Z'
 
-  const [pendingRes, pointsRes, readingsCountRes, todayReadingsRes] = await Promise.all([
+  const [pendingRes, pointsRes, readingsCountRes, todayReadingsRes, authUserCount] = await Promise.all([
     // 拉取所有消息的 user_id、content、reply，后面在 JS 端按用户维度判断
     supabase
       .from('support_messages')
@@ -483,6 +515,7 @@ export async function adminGetStats(): Promise<AdminStats> {
       .from('readings')
       .select('id', { count: 'exact', head: true })
       .gte('created_at', today + 'T00:00:00.000Z'),
+    adminFetchAuthUserCount(),
   ])
 
   // 统计近 7 天每日测算条数
@@ -495,16 +528,9 @@ export async function adminGetStats(): Promise<AdminStats> {
 
   const todayConsumed = (pointsRes.data ?? []).reduce((sum, r) => sum + Math.abs(r.amount as number), 0)
 
-  // 总用户数：查 admin_user_count view（从 auth.users 计数，最准确）
-  // 如果 view 不存在则兜底用 user_points 表
-  let totalUsers = 0
-  const { data: countViewData } = await supabase
-    .from('admin_user_count')
-    .select('total')
-    .single()
-  if (countViewData && (countViewData as { total: number }).total) {
-    totalUsers = Number((countViewData as { total: number }).total)
-  } else {
+  // 总用户数：通过管理员 API 从 auth.users 计数；失败则兜底用 user_points 表
+  let totalUsers = authUserCount ?? 0
+  if (authUserCount === null) {
     const { count: fallbackCount } = await supabase
       .from('user_points')
       .select('user_id', { count: 'exact', head: true })
@@ -566,15 +592,12 @@ export async function adminGetReadingsByDate(date: string): Promise<DayReadingIt
 
   if (error || !data) return []
 
-  // 补充邮箱（优先用 admin_users_view）
+  // 补充邮箱（优先用管理员 API）
   const userIds = [...new Set((data as { user_id: string }[]).map((r) => r.user_id).filter(Boolean))]
-  let emailMap = new Map<string, string>()
+  const emailMap = new Map<string, string>()
   if (userIds.length > 0) {
-    const { data: viewData } = await supabase
-      .from('admin_users_view')
-      .select('id, email')
-      .in('id', userIds)
-    for (const r of (viewData ?? []) as { id: string; email: string }[]) {
+    const viewData = await adminFetchAuthUsers(userIds)
+    for (const r of viewData) {
       if (r.id && r.email) emailMap.set(r.id, r.email)
     }
   }
