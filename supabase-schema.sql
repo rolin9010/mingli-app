@@ -29,12 +29,26 @@ create table support_messages (
   created_at timestamptz default now()
 );
 
--- 仅管理员（service_role）可读；用户只能插入自己的消息，无法读取他人消息
+-- 仅管理员可读全量；登录用户只能读写自己的消息；匿名用户只能写 anonymous 消息。
 alter table support_messages enable row level security;
 
-create policy "任何人可插入咨询消息"
+drop policy if exists "任何人可插入咨询消息" on support_messages;
+drop policy if exists "用户可读自己会话的消息" on support_messages;
+
+create policy "匿名用户可插入匿名咨询消息"
   on support_messages for insert
-  with check (true);
+  to anon
+  with check (user_id = 'anonymous');
+
+create policy "登录用户可插入自己的咨询消息"
+  on support_messages for insert
+  to authenticated
+  with check ((select auth.uid())::text = user_id);
+
+create policy "登录用户可读自己的咨询消息"
+  on support_messages for select
+  to authenticated
+  using ((select auth.uid())::text = user_id);
 
 -- 注意：查询权限仅对 service_role 开放（Supabase Dashboard 内置 service_role）
 -- 若需后台管理员账号查看，可在 Dashboard → Table Editor → support_messages 直接查阅
@@ -272,6 +286,27 @@ drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created
   after insert on auth.users
   for each row execute procedure public.handle_new_user();
+
+revoke execute on function public.handle_new_user()
+  from public, anon, authenticated;
+grant execute on function public.handle_new_user()
+  to service_role;
+
+do $$
+begin
+  if exists (
+    select 1
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and p.proname = 'rls_auto_enable'
+  ) then
+    revoke execute on function public.rls_auto_enable()
+      from public, anon, authenticated;
+    grant execute on function public.rls_auto_enable()
+      to service_role;
+  end if;
+end $$;
 
 -- ════════════════════════════════════════════════════════════════════════════
 -- 管理员已读标记字段（在 Supabase SQL Editor 执行）
