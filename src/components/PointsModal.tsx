@@ -128,6 +128,7 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
   const { balance, checkedInToday, loading, doCheckIn, records, refresh } = usePoints()
   const [tab, setTab] = useState<TabKey>(defaultTab)
   const [checkingIn, setCheckingIn] = useState(false)
+  const [checkInError, setCheckInError] = useState('')
 
   // 邀请统计
   const [inviteStats, setInviteStats] = useState<{ count: number; totalPoints: number } | null>(null)
@@ -157,6 +158,10 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
   useEffect(() => {
     return () => stopPolling()
   }, [stopPolling])
+
+  useEffect(() => {
+    if (open) void refresh()
+  }, [open, refresh])
 
   const handleSuccessfulPayment = useCallback(async (result: Awaited<ReturnType<typeof queryOrder>>) => {
     if (result.pointsCredited) {
@@ -254,9 +259,19 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
   if (!open) return null
 
   const handleCheckIn = async () => {
+    if (!memberInfo?.isMember) {
+      setTab('buy')
+      return
+    }
     setCheckingIn(true)
-    await doCheckIn()
-    setCheckingIn(false)
+    setCheckInError('')
+    try {
+      await doCheckIn()
+    } catch (error) {
+      setCheckInError(error instanceof Error ? error.message : '签到失败，请稍后重试')
+    } finally {
+      setCheckingIn(false)
+    }
   }
 
   const startPayment = async (itemId: string, label: string) => {
@@ -473,12 +488,14 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                   </div>
                   <div>
                     <div className="text-xs font-semibold text-slate-100">每日签到</div>
-                    <div className="text-[11px] text-slate-500 mt-0.5">每天签到获得1积分</div>
+                    <div className="text-[11px] text-slate-500 mt-0.5">
+                      {memberInfo?.isMember ? '有效会员每天签到获得 1 积分' : '签到仅对有效松眠会员开放'}
+                    </div>
                   </div>
                 </div>
                 <button
                   type="button"
-                  disabled={checkedInToday || checkingIn}
+                  disabled={checkedInToday || checkingIn || memberLoading}
                   onClick={() => void handleCheckIn()}
                   className={`w-full rounded-xl py-3 text-xs font-semibold transition-all ${
                     checkedInToday
@@ -488,8 +505,15 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                         : 'bg-amber-400/15 border border-amber-400/30 text-amber-100 hover:bg-amber-400/25 active:scale-[0.98]'
                   }`}
                 >
-                  {checkedInToday ? '✓ 今日已签到' : checkingIn ? '签到中…' : '📅 立即签到'}
+                  {checkedInToday
+                    ? '✓ 今日已签到'
+                    : checkingIn
+                      ? '签到中…'
+                      : memberInfo?.isMember
+                        ? '📅 立即签到'
+                        : '开通会员后签到'}
                 </button>
+                {checkInError && <p className="mt-2 text-center text-[11px] text-rose-300">{checkInError}</p>}
               </div>
             </div>
           )}
@@ -589,9 +613,7 @@ export default function PointsModal({ open, onClose, defaultTab = 'checkin' }: P
                 </div>
 
                 <div className="grid grid-cols-2 gap-2">
-                  {MEMBERSHIP_PLANS.filter(
-                    (plan) => plan.id !== 'trial' || memberInfo?.hasUsedTrial === false,
-                  ).map((plan) => (
+                  {MEMBERSHIP_PLANS.map((plan) => (
                     <button
                       key={plan.id}
                       type="button"

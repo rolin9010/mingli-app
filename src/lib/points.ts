@@ -55,6 +55,16 @@ export const POINTS_COST = {
   DAILY_TIP: 1,           // 每日贴士
 } as const
 
+/** 业务日统一按中国标准时间计算，避免 00:00-08:00 被 UTC 判成前一天。 */
+export function getShanghaiDateKey(now = new Date()): string {
+  return new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+  }).format(now)
+}
+
 const DEFAULT_STATE: PointsState = {
   balance: 0,
   checkedInToday: false,
@@ -83,15 +93,13 @@ export async function loadPointsState(): Promise<PointsState> {
   ])
 
   if (pointsRes.error || !pointsRes.data) {
-    // 用户行不存在（老用户迁移），自动初始化
-    await initUserPoints(user.id)
-    return { ...DEFAULT_STATE, balance: 5 }
+    throw new Error(pointsRes.error?.message ?? '积分账户不存在')
   }
 
   const { balance, check_in_streak, last_check_in } = pointsRes.data
 
   // 判断今日是否已签到
-  const today = new Date().toISOString().slice(0, 10) // YYYY-MM-DD
+  const today = getShanghaiDateKey()
   const checkedInToday = last_check_in === today
 
   const records: PointsRecord[] = (recordsRes.data ?? []).map((r) => ({
@@ -110,133 +118,45 @@ export async function loadPointsState(): Promise<PointsState> {
   }
 }
 
-/** 初始化新用户的积分行（正常由数据库触发器处理，此处为兜底） */
-async function initUserPoints(userId: string): Promise<void> {
-  // upsert 避免重复插入
-  await supabase.from('user_points').upsert({
-    user_id: userId,
-    balance: 5,
-    check_in_streak: 0,
-    last_check_in: null,
-  }, { onConflict: 'user_id' })
-
-  await supabase.from('points_records').insert({
-    user_id: userId,
-    type: 'reward',
-    amount: 5,
-    description: '新用户赠送',
-  })
-}
-
 /** 签到 —— 服务端原子操作：更新余额、streak、last_check_in，写流水 */
-export async function checkIn(): Promise<{ success: boolean; reward: number; newStreak: number }> {
+export async function checkIn(): Promise<{
+  success: boolean
+  reward: number
+  newStreak: number
+  newBalance: number
+  alreadyChecked: boolean
+}> {
   const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false, reward: 0, newStreak: 0 }
+  if (!user) return { success: false, reward: 0, newStreak: 0, newBalance: 0, alreadyChecked: false }
 
-  const today = new Date().toISOString().slice(0, 10)
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session?.access_token) throw new Error('登录已失效，请重新登录')
 
-  // 读取当前状态
-  const { data, error } = await supabase
-    .from('user_points')
-    .select('balance, check_in_streak, last_check_in')
-    .eq('user_id', user.id)
-    .single()
+  const response = await fetch('/api/miniprogram-member', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${session.access_token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({ action: 'webPointsCheckIn' }),
+  })
+  const body = await response.json() as {
+    success?: boolean
+    reward?: number
+    newStreak?: number
+    newBalance?: number
+    alreadyChecked?: boolean
+    error?: string
+  }
+  if (!response.ok || !body.success) {
+    throw new Error(body.error || '签到失败，请稍后重试')
+  }
 
-  if (error || !data) return { success: false, reward: 0, newStreak: 0 }
-  if (data.last_check_in === today) return { success: false, reward: 0, newStreak: data.check_in_streak }
-
-  // 计算连续签到天数
-  const yesterday = new Date()
-  yesterday.setDate(yesterday.getDate() - 1)
-  const yesterdayStr = yesterday.toISOString().slice(0, 10)
-  const newStreak = data.last_check_in === yesterdayStr ? data.check_in_streak + 1 : 1
-  const reward = Math.min(newStreak, 5)
-  const newBalance = data.balance + reward
-
-  // 原子更新
-  const [updateRes, insertRes] = await Promise.all([
-    supabase
-      .from('user_points')
-      .update({
-        balance: newBalance,
-        check_in_streak: newStreak,
-        last_check_in: today,
-        updated_at: new Date().toISOString(),
-      })
-      .eq('user_id', user.id),
-    supabase.from('points_records').insert({
-      user_id: user.id,
-      type: 'checkin',
-      amount: reward,
-      description: `每日签到（连续${newStreak}天）`,
-    }),
-  ])
-
-  if (updateRes.error || insertRes.error) return { success: false, reward: 0, newStreak: data.check_in_streak }
-  return { success: true, reward, newStreak }
-}
-
-/** 消耗积分 */
-export async function consumePoints(
-  cost: number,
-  type: PointsRecord['type'],
-  description: string,
-): Promise<{ success: boolean }> {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false }
-
-  // 读取当前余额
-  const { data, error } = await supabase
-    .from('user_points')
-    .select('balance')
-    .eq('user_id', user.id)
-    .single()
-
-  if (error || !data || data.balance < cost) return { success: false }
-
-  const [updateRes, insertRes] = await Promise.all([
-    supabase
-      .from('user_points')
-      .update({ balance: data.balance - cost, updated_at: new Date().toISOString() })
-      .eq('user_id', user.id),
-    supabase.from('points_records').insert({
-      user_id: user.id,
-      type,
-      amount: -cost,
-      description,
-    }),
-  ])
-
-  if (updateRes.error || insertRes.error) return { success: false }
-  return { success: true }
-}
-
-/** 充值积分（后续对接真实支付后，由服务端 webhook 回调；此处为后台手动补积分 / 测试用） */
-export async function rechargePoints(amount: number, description?: string): Promise<{ success: boolean }> {
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) return { success: false }
-
-  const { data, error } = await supabase
-    .from('user_points')
-    .select('balance')
-    .eq('user_id', user.id)
-    .single()
-
-  if (error || !data) return { success: false }
-
-  const [updateRes, insertRes] = await Promise.all([
-    supabase
-      .from('user_points')
-      .update({ balance: data.balance + amount, updated_at: new Date().toISOString() })
-      .eq('user_id', user.id),
-    supabase.from('points_records').insert({
-      user_id: user.id,
-      type: 'recharge',
-      amount,
-      description: description ?? `充值${amount}积分`,
-    }),
-  ])
-
-  if (updateRes.error || insertRes.error) return { success: false }
-  return { success: true }
+  return {
+    success: true,
+    reward: Number(body.reward ?? 0),
+    newStreak: Number(body.newStreak ?? 0),
+    newBalance: Number(body.newBalance ?? 0),
+    alreadyChecked: body.alreadyChecked ?? Number(body.reward ?? 0) === 0,
+  }
 }

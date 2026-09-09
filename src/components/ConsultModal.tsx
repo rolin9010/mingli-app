@@ -63,7 +63,7 @@ const WELCOME_MSG: UiMessage = {
   id: 'welcome',
   role: 'support',
   isSystem: true,
-  content: '你好！这里是五行能量人工客服。\n\n如有人生重大抉择需要深度个性化指导，或有任何问题与建议，欢迎留言，我们会尽快回复你 🙏',
+  content: '你好！这里是元气文化人工客服。\n\n如有使用中的问题或建议，欢迎留言，我们会尽快回复你。',
   created_at: new Date(0).toISOString(),
 }
 
@@ -212,7 +212,7 @@ export default function ConsultModal({
               🔮
             </div>
             <div>
-              <div className="text-sm font-semibold text-amber-100">五行能量客服</div>
+              <div className="text-sm font-semibold text-amber-100">元气文化客服</div>
               <div className="flex items-center gap-1.5 text-[11px] text-emerald-400">
                 <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
                 在线 · 每 15 秒自动刷新回复

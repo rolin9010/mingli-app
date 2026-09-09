@@ -1,8 +1,8 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient } from '@supabase/supabase-js'
-import { createSign } from 'crypto'
-import { getWxPayConfig, wxpayRequest, genOutTradeNo, normalizePem } from './_wxpay.js'
+import { getWxPayConfig, wxpayRequest, genOutTradeNo } from './_wxpay.js'
 import { buildAttach, getPurchaseEligibilityError, getPurchaseItem } from './_fulfillment.js'
+import { createMiniProgramOrder } from './_miniprogram-order.js'
 
 /**
  * POST /api/pay/create-order
@@ -80,7 +80,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const result = await wxpayRequest<{ code_url: string }>('POST', '/v3/pay/transactions/native', {
         appid: process.env.WX_APPID ?? 'wxce6d9e5883f89cb7',
         mchid,
-        description: `五行明理 - ${item.label}`,
+        description: `元气文化 - ${item.label}`,
         out_trade_no: outTradeNo,
         notify_url: notifyUrl,
         amount: { total: item.priceFen, currency: 'CNY' },
@@ -94,13 +94,13 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       const result = await wxpayRequest<{ h5_url: string }>('POST', '/v3/pay/transactions/h5', {
         appid: process.env.WX_APPID ?? 'wxce6d9e5883f89cb7',
         mchid,
-        description: `五行明理 - ${item.label}`,
+        description: `元气文化 - ${item.label}`,
         out_trade_no: outTradeNo,
         notify_url: notifyUrl,
         amount: { total: item.priceFen, currency: 'CNY' },
         scene_info: {
           payer_client_ip: (req.headers['x-forwarded-for'] as string)?.split(',')[0] ?? '127.0.0.1',
-          h5_info: { type: 'Wap', app_name: '五行明理', app_url: 'https://wuxingme.cn' },
+          h5_info: { type: 'Wap', app_name: '元气文化', app_url: 'https://wuxingme.cn' },
         },
         attach,
       })
@@ -108,40 +108,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(200).json({ outTradeNo, h5Url: result.h5_url })
 
     } else {
-      // JSAPI 支付（小程序）
-      const result = await wxpayRequest<{ prepay_id: string }>('POST', '/v3/pay/transactions/jsapi', {
-        appid: process.env.WX_MINI_APPID ?? 'wxf1d2e889d05100bb',
-        mchid,
-        description: `五行明理 - ${item.label}`,
-        out_trade_no: outTradeNo,
-        notify_url: notifyUrl,
-        amount: { total: item.priceFen, currency: 'CNY' },
-        payer: { openid },
-        attach,
-      })
-
-      // 构造小程序调起支付所需参数
-      const { privateKey } = getWxPayConfig()
-      const appId = process.env.WX_MINI_APPID ?? 'wxf1d2e889d05100bb'
-      const timestamp = Math.floor(Date.now() / 1000).toString()
-      const nonce = Math.random().toString(36).slice(2, 18)
-      const prepayId = `prepay_id=${result.prepay_id}`
-      const signStr = `${appId}\n${timestamp}\n${nonce}\n${prepayId}\n`
-      const pem = normalizePem(privateKey)
-      const signer = createSign('RSA-SHA256')
-      signer.update(signStr)
-      const paySign = signer.sign(pem, 'base64')
-
-      return res.status(200).json({
-        outTradeNo,
-        jsapiParams: {
-          timeStamp: timestamp,
-          nonceStr: nonce,
-          package: prepayId,
-          signType: 'RSA',
-          paySign,
-        },
-      })
+      return res.status(200).json(await createMiniProgramOrder(user.id, openid!, item))
     }
   } catch (e: unknown) {
     const msg = e instanceof Error ? e.message : '下单失败'

@@ -129,10 +129,13 @@ create table if not exists user_points (
 
 alter table user_points enable row level security;
 
-create policy "用户只能读写自己的积分行"
-  on user_points for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+create policy "用户只能读取自己的积分行"
+  on user_points for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+revoke insert, update, delete on public.user_points from anon, authenticated;
+grant select on public.user_points to authenticated;
 
 -- ── 积分流水表 ────────────────────────────────────────────────────────────────
 create table if not exists points_records (
@@ -147,10 +150,13 @@ create table if not exists points_records (
 
 alter table points_records enable row level security;
 
-create policy "用户只能读写自己的积分记录"
-  on points_records for all
-  using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+create policy "用户只能读取自己的积分记录"
+  on points_records for select
+  to authenticated
+  using ((select auth.uid()) = user_id);
+
+revoke insert, update, delete on public.points_records from anon, authenticated;
+grant select on public.points_records to authenticated;
 
 create unique index if not exists points_records_order_id_key
   on points_records (order_id)
@@ -205,6 +211,183 @@ revoke all on function public.credit_points_once(uuid, int, text, text, text)
 grant execute on function public.credit_points_once(uuid, int, text, text, text)
   to service_role;
 
+-- 签到只发 1 积分；余额、连续天数和流水在同一事务中完成。
+-- 小程序服务端使用带 user_id 的版本，网页用户使用无参包装函数。
+create or replace function public.check_in_points_for_user(p_user_id uuid)
+returns table(reward integer, new_streak integer, new_balance integer, already_checked boolean)
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_today date := (now() at time zone 'Asia/Shanghai')::date;
+  v_yesterday date := (now() at time zone 'Asia/Shanghai')::date - 1;
+  v_balance integer;
+  v_streak integer;
+  v_last_check_in date;
+  v_created_rows integer := 0;
+begin
+  if p_user_id is null then
+    raise exception '用户标识不能为空';
+  end if;
+
+  insert into public.user_points (user_id, balance, check_in_streak, last_check_in)
+  values (p_user_id, 5, 0, null)
+  on conflict (user_id) do nothing;
+
+  get diagnostics v_created_rows = row_count;
+  if v_created_rows > 0 then
+    insert into public.points_records (user_id, type, amount, description, order_id)
+    values (p_user_id, 'reward', 5, '新用户赠送', 'signup:' || p_user_id::text)
+    on conflict (order_id) where order_id is not null do nothing;
+  end if;
+
+  select balance, check_in_streak, last_check_in
+    into v_balance, v_streak, v_last_check_in
+  from public.user_points
+  where user_id = p_user_id
+  for update;
+
+  if v_last_check_in = v_today then
+    return query select 0, v_streak, v_balance, true;
+    return;
+  end if;
+
+  v_streak := case when v_last_check_in = v_yesterday then v_streak + 1 else 1 end;
+  v_balance := v_balance + 1;
+
+  update public.user_points
+  set balance = v_balance,
+      check_in_streak = v_streak,
+      last_check_in = v_today,
+      updated_at = now()
+  where user_id = p_user_id;
+
+  insert into public.points_records (user_id, type, amount, description, order_id)
+  values (
+    p_user_id,
+    'checkin',
+    1,
+    '每日签到（连续' || v_streak || '天）',
+    'checkin:' || p_user_id::text || ':' || v_today::text
+  );
+
+  return query select 1, v_streak, v_balance, false;
+end;
+$$;
+
+create or replace function public.check_in_points_atomic()
+returns table(reward integer, new_streak integer, new_balance integer, already_checked boolean)
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  v_user_id uuid := auth.uid();
+begin
+  if v_user_id is null then
+    raise exception 'authentication required';
+  end if;
+
+  return query
+  select * from public.check_in_points_for_user(v_user_id);
+end;
+$$;
+
+revoke all on function public.check_in_points_for_user(uuid)
+  from public, anon, authenticated;
+revoke all on function public.check_in_points_atomic()
+  from public, anon, authenticated;
+grant execute on function public.check_in_points_for_user(uuid)
+  to service_role;
+grant execute on function public.check_in_points_atomic()
+  to authenticated;
+
+-- AI 解读专用：余额足够才会在同一事务内扣分并写入流水。
+-- 仅服务端调用，避免页面本地扣分和生成接口重复扣分。
+create or replace function public.consume_points_atomic(
+  p_user_id uuid,
+  p_amount integer,
+  p_type text,
+  p_description text
+)
+returns integer
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_remaining_balance integer;
+begin
+  if p_amount <= 0 then
+    raise exception '积分数量必须大于 0';
+  end if;
+
+  if p_type not in ('consume_ai', 'consume_heban', 'consume_daily') then
+    raise exception '不支持的积分消费类型';
+  end if;
+
+  update public.user_points
+  set balance = balance - p_amount,
+      updated_at = now()
+  where user_id = p_user_id
+    and balance >= p_amount
+  returning balance into v_remaining_balance;
+
+  if not found then
+    return null;
+  end if;
+
+  insert into public.points_records (user_id, type, amount, description)
+  values (p_user_id, p_type, -p_amount, p_description);
+
+  return v_remaining_balance;
+end;
+$$;
+
+create or replace function public.refund_points_atomic(
+  p_user_id uuid,
+  p_amount integer,
+  p_description text
+)
+returns integer
+language plpgsql
+security invoker
+set search_path = public
+as $$
+declare
+  v_balance integer;
+begin
+  if p_amount <= 0 then
+    raise exception '积分数量必须大于 0';
+  end if;
+
+  update public.user_points
+  set balance = balance + p_amount,
+      updated_at = now()
+  where user_id = p_user_id
+  returning balance into v_balance;
+
+  if not found then
+    raise exception '积分账户不存在';
+  end if;
+
+  insert into public.points_records (user_id, type, amount, description)
+  values (p_user_id, 'reward', p_amount, p_description);
+
+  return v_balance;
+end;
+$$;
+
+revoke all on function public.consume_points_atomic(uuid, integer, text, text)
+  from public, anon, authenticated;
+revoke all on function public.refund_points_atomic(uuid, integer, text)
+  from public, anon, authenticated;
+grant execute on function public.consume_points_atomic(uuid, integer, text, text)
+  to service_role;
+grant execute on function public.refund_points_atomic(uuid, integer, text)
+  to service_role;
+
 -- ── 邀请关系表 ────────────────────────────────────────────────────────────────
 create table if not exists invites (
   id          uuid default gen_random_uuid() primary key,
@@ -232,14 +415,19 @@ as $$
 declare
   v_referrer_id uuid;
   v_invite_points int := 3;   -- 邀请双方各得积分数
+  v_created_rows int := 0;
 begin
   -- 1. 初始化新用户积分行（赠送 5 积分）
   insert into public.user_points (user_id, balance, check_in_streak, last_check_in)
   values (new.id, 5, 0, null)
   on conflict (user_id) do nothing;
 
-  insert into public.points_records (user_id, type, amount, description)
-  values (new.id, 'reward', 5, '新用户赠送');
+  get diagnostics v_created_rows = row_count;
+  if v_created_rows > 0 then
+    insert into public.points_records (user_id, type, amount, description, order_id)
+    values (new.id, 'reward', 5, '新用户赠送', 'signup:' || new.id::text)
+    on conflict (order_id) where order_id is not null do nothing;
+  end if;
 
   -- 2. 处理邀请奖励
   -- 从 user_metadata 中取 referrer_id（注册时前端写入）

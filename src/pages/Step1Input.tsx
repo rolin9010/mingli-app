@@ -6,6 +6,7 @@ import FormField from '../components/FormField'
 import { IconSparkle } from '../components/icons'
 import { getReadings, type ReadingListItem } from '../lib/history'
 import { supabase } from '../lib/supabase'
+import { saveDailyTipProfile } from '../lib/dailyTipProfile'
 
 /**
  * 可选排盘体系；与 Step2 `switch (sysKey)` 对齐。
@@ -705,6 +706,47 @@ export default function Step1Input({
       (useMbtiDimensions ? hasChosenMbtiDimensions : mbti !== '')
     return { nameOk, birthOk, systemsOk, mbtiOk, allOk: nameOk && birthOk && systemsOk && mbtiOk }
   }, [name, birth, selectedChartSystems, mbti, useMbtiDimensions, hasChosenMbtiDimensions])
+
+  useEffect(() => {
+    if (!validation.nameOk || !validation.birthOk) return
+
+    const timer = window.setTimeout(() => {
+      void saveDailyTipProfile({
+        name: name.trim(),
+        birth,
+        gender,
+        bloodType: bloodSystemSelected ? bloodType : undefined,
+        mbti: undefined,
+        calendarType,
+        country,
+        province,
+        city,
+        district: district || undefined,
+        useSolarTime,
+        saveData: true,
+        selectedChartSystems: [...selectedChartSystems],
+      }).catch((error) => {
+        console.warn('每日贴士资料自动保存失败:', error)
+      })
+    }, 800)
+
+    return () => window.clearTimeout(timer)
+  }, [
+    name,
+    birth,
+    gender,
+    bloodSystemSelected,
+    bloodType,
+    calendarType,
+    country,
+    province,
+    city,
+    district,
+    useSolarTime,
+    selectedChartSystems,
+    validation.nameOk,
+    validation.birthOk,
+  ])
 
   const next = () => {
     if (!validation.allOk || isSubmitting) return

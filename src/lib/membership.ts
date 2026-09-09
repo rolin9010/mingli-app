@@ -114,16 +114,6 @@ export async function getAccessToken(): Promise<string | null> {
 /** 会员套餐配置（用于展示购买选项） */
 export const MEMBERSHIP_PLANS = [
   {
-    id: 'trial',
-    label: '7天试用',
-    price: '¥0.01',
-    priceFen: 1,            // 单位：分
-    duration: 7,            // 天
-    bonusPoints: 1,
-    badge: '新人专享',
-    highlight: true,
-  },
-  {
     id: 'monthly',
     label: '月度会员',
     price: '¥18',
@@ -141,7 +131,7 @@ export const MEMBERSHIP_PLANS = [
     duration: 90,
     bonusPoints: 8,
     badge: '推荐',
-    highlight: false,
+    highlight: true,
   },
   {
     id: 'yearly',

@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import type { UserInput, HeBanUserInput } from './types'
+import { mergeReadingReportVersion, type AiReadingMode } from './readingReportVersions'
 
 export type ReadingListItem = {
   id: string
@@ -26,12 +27,81 @@ export function isHeBanInputData(data: UserInput | HeBanUserInput | null): data 
   return data !== null && 'personA' in data && 'personB' in data && 'relation' in data
 }
 
-/** 保存一次单人排盘记录 */
-export async function saveReading(input: UserInput, aiReport: string) {
+function stableJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`
+  if (value && typeof value === 'object') {
+    return `{${Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, child]) => `${JSON.stringify(key)}:${stableJson(child)}`)
+      .join(',')}}`
+  }
+  return JSON.stringify(value) ?? 'undefined'
+}
+
+type ExistingReading = {
+  id: string
+  input_data: UserInput | null
+  ai_report: string | null
+}
+
+/**
+ * 保存单人解读。普通版与深度版合并到同一份档案，不会互相覆盖。
+ */
+export async function saveReading(
+  input: UserInput,
+  aiReport: string,
+  mode: AiReadingMode = 'quick',
+  existingReadingId?: string | null,
+) {
   const {
     data: { user },
   } = await supabase.auth.getUser()
   if (!user) return null
+
+  const name = input.name || '未命名'
+  const birthDate = `${input.birth.year}-${String(input.birth.month).padStart(2, '0')}-${String(input.birth.day).padStart(2, '0')}`
+  let existing: ExistingReading | null = null
+
+  if (existingReadingId) {
+    const { data, error } = await supabase
+      .from('readings')
+      .select('id, input_data, ai_report')
+      .eq('id', existingReadingId)
+      .eq('user_id', user.id)
+      .maybeSingle()
+    if (error) throw error
+    existing = data as ExistingReading | null
+  }
+
+  // 兼容页面刷新后再升级深度解读：按完整输入匹配最近的同一份档案。
+  if (!existing) {
+    const { data, error } = await supabase
+      .from('readings')
+      .select('id, input_data, ai_report')
+      .eq('user_id', user.id)
+      .eq('name', name)
+      .eq('birth_date', birthDate)
+      .order('created_at', { ascending: false })
+      .limit(10)
+    if (error) throw error
+    const inputSignature = stableJson(input)
+    existing = ((data as ExistingReading[] | null) ?? []).find(
+      (row) => stableJson(row.input_data) === inputSignature,
+    ) ?? null
+  }
+
+  const mergedReport = mergeReadingReportVersion(existing?.ai_report, mode, aiReport)
+  if (existing) {
+    const { data, error } = await supabase
+      .from('readings')
+      .update({ ai_report: mergedReport })
+      .eq('id', existing.id)
+      .eq('user_id', user.id)
+      .select()
+      .single()
+    if (error) throw error
+    return data
+  }
 
   const { data, error } = await supabase
     .from('readings')
@@ -39,9 +109,9 @@ export async function saveReading(input: UserInput, aiReport: string) {
       user_id: user.id,
       user_email: user.email ?? null,
       input_data: input,
-      ai_report: aiReport,
-      name: input.name || '未命名',
-      birth_date: `${input.birth.year}-${String(input.birth.month).padStart(2, '0')}-${String(input.birth.day).padStart(2, '0')}`,
+      ai_report: mergedReport,
+      name,
+      birth_date: birthDate,
     })
     .select()
     .single()
@@ -120,6 +190,30 @@ export async function updateReadingName(id: string, name: string): Promise<void>
 export type BaziSummary = {
   pillars: { year: string; month: string; day: string; hour: string }
   elements: { element: string; percent: number }[]
+}
+
+/** 切换生日历法后，用新结果覆盖档案并使旧解读失效。 */
+export async function updateReadingCalendar(
+  id: string,
+  input: UserInput,
+  baziSummary: BaziSummary,
+): Promise<void> {
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) throw new Error('未登录')
+
+  const birthDate = `${input.birth.year}-${String(input.birth.month).padStart(2, '0')}-${String(input.birth.day).padStart(2, '0')}`
+  const { error } = await supabase
+    .from('readings')
+    .update({
+      input_data: input,
+      birth_date: birthDate,
+      bazi_summary: baziSummary,
+      ai_report: null,
+    })
+    .eq('id', id)
+    .eq('user_id', user.id)
+
+  if (error) throw error
 }
 
 /** 设置某条记录为「我的八字」（同时清除同用户其他记录的 is_primary） */

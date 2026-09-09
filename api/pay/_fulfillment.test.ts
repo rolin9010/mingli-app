@@ -4,10 +4,10 @@ import { buildAttach, getPurchaseEligibilityError, getPurchaseItem } from './_fu
 
 test('membership catalog includes the configured points bonuses', () => {
   const expected = {
-    trial: 1,
-    monthly: 3,
-    quarterly: 8,
-    yearly: 22,
+    trial: 3,
+    monthly: 9,
+    quarterly: 30,
+    yearly: 90,
   }
 
   for (const [id, bonusPoints] of Object.entries(expected)) {
@@ -18,20 +18,20 @@ test('membership catalog includes the configured points bonuses', () => {
   }
 })
 
-test('trial membership charges one fen', () => {
+test('legacy trial membership remains in the catalog for delayed fulfillment', () => {
   const item = getPurchaseItem('trial')
   assert.ok(item)
-  assert.equal(item.priceFen, 1)
+  assert.equal(item.priceFen, 100)
 })
 
-test('trial membership can only be purchased once per account', () => {
+test('trial membership is no longer available for new purchases', () => {
   const trial = getPurchaseItem('trial')
   const monthly = getPurchaseItem('monthly')
 
   assert.ok(trial)
   assert.ok(monthly)
-  assert.equal(getPurchaseEligibilityError(trial, false), null)
-  assert.equal(getPurchaseEligibilityError(trial, true), '7天新人试用仅限首次购买')
+  assert.equal(getPurchaseEligibilityError(trial, false), '7天新人试用已下架，请选择月度、季度或年度会员')
+  assert.equal(getPurchaseEligibilityError(trial, true), '7天新人试用已下架，请选择月度、季度或年度会员')
   assert.equal(getPurchaseEligibilityError(monthly, true), null)
 })
 

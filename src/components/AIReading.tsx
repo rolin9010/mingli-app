@@ -20,8 +20,9 @@ export default function AIReading({ input, results }: Props) {
     setText('')
     setStarted(true)
     try {
-      const prompt = buildReadingPrompt(input, results)
-      const result = await fetchAIReading(prompt)
+      // 此旧入口没有模式选择，明确固定为快速解读，避免未来误按默认值计费。
+      const prompt = buildReadingPrompt(input, results, 'quick')
+      const result = await fetchAIReading(prompt, 'quick')
       setText(result)
     } catch (e: unknown) {
       const msg = e instanceof Error ? e.message : '解读失败，请重试'
@@ -60,7 +61,7 @@ export default function AIReading({ input, results }: Props) {
             <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
             <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8z" />
           </svg>
-          正在召唤 AI 大师解读中，请稍候…
+          松眠 AI 老师正在解读，请稍候…
         </div>
       )}
 

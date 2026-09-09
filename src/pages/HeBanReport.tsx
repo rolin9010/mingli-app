@@ -38,13 +38,11 @@ function parseHeBanTopics(markdown: string): Record<HeBanTabKey, string> {
 
   const sections: Record<string, string> = {}
   const chineseNums: Record<string, string> = { '一': '1', '二': '2', '三': '3', '四': '4', '五': '5' }
-  const topicRegex = /###\s*主题[一二三四五1-5][：:：]?[^\n]*/g
+  const topicRegex = /^#{2,6}\s*(?:\*\*\s*)?主题\s*([一二三四五1-5])[^\n]*$/gm
   const matches: { index: number; num: string }[] = []
   let m: RegExpExecArray | null
   while ((m = topicRegex.exec(rest)) !== null) {
-    const numMatch = m[0].match(/主题([一二三四五1-5])/)
-    if (!numMatch) continue
-    const rawNum = numMatch[1]!
+    const rawNum = m[1]!
     matches.push({ index: m.index, num: chineseNums[rawNum] ?? rawNum })
   }
   for (let i = 0; i < matches.length; i++) {
@@ -173,7 +171,7 @@ function AiLoading({ estimatedSeconds }: { estimatedSeconds: number }) {
         <div className="absolute inset-3 animate-spin rounded-full border border-transparent border-t-amber-300/40" style={{ animationDuration: '2s', animationDirection: 'reverse' }} />
       </div>
       <div className="space-y-2">
-        <p className="text-xl font-semibold tracking-wide text-amber-100 sm:text-2xl">AI 大师解读中</p>
+        <p className="text-xl font-semibold tracking-wide text-amber-100 sm:text-2xl">松眠 AI 老师解读中</p>
         <p className="text-sm text-slate-300/90">
           {remain > 0 ? <>倒计时 {remain} 秒</> : <span className="text-amber-200/80">预计时间已到，仍在深度生成中…</span>}
         </p>
@@ -210,7 +208,7 @@ export default function HeBanReport({
   // 缓存 key 区分快速/深度
   const fingerprint = useMemo(() => `${baseFingerprint}_${readMode}`, [baseFingerprint, readMode])
 
-  const { balance, doConsume } = usePoints()
+  const { balance, refresh: refreshPoints } = usePoints()
   const [showPointsModal, setShowPointsModal] = useState(false)
   const [aiContent, setAiContent] = useState(() => getCachedAiReport(`${computeHeBanFingerprint(input)}_quick`) ?? '')
   const [aiPhase, setAiPhase] = useState<'idle' | 'loading' | 'done' | 'error'>(() =>
@@ -221,6 +219,7 @@ export default function HeBanReport({
   const [activeTab, setActiveTab] = useState<HeBanTabKey>('greeting')
   const [consultOpen, setConsultOpen] = useState(false)
   const tabTopRef = useRef<HTMLDivElement>(null)
+  const aiRequestInFlight = useRef(false)
 
   const switchTab = (key: HeBanTabKey) => {
     setActiveTab(key)
@@ -258,18 +257,20 @@ export default function HeBanReport({
   }, [fingerprint])
 
   const startAiReading = async (opts?: { force?: boolean }) => {
+    if (aiRequestInFlight.current) return
     if (opts?.force) clearCachedAiReport(fingerprint)
     else {
       const cached = getCachedAiReport(fingerprint)
       if (cached) { setAiContent(cached); setAiPhase('done'); return }
     }
+    aiRequestInFlight.current = true
     setAiLoadGen((g) => g + 1)
     setAiPhase('loading')
     setAiError('')
     setAiContent('')
     try {
       const prompt = buildHeBanPrompt(input.personA, results.resultA, input.personB, results.resultB, input.relation, readMode)
-      const text = await fetchHeBanAIReading(prompt)
+      const text = await fetchHeBanAIReading(prompt, readMode)
       setAiContent(text)
       setAiPhase('done')
 setActiveTab('greeting')
@@ -283,6 +284,8 @@ setActiveTab('greeting')
     } catch (e: unknown) {
       setAiError(e instanceof Error ? e.message : '解读失败，请重试')
       setAiPhase('error')
+    } finally {
+      aiRequestInFlight.current = false
     }
   }
 
@@ -360,15 +363,12 @@ setActiveTab('greeting')
                     onClick={() => {
                       const cost = readMode === 'quick' ? POINTS_COST.HEBAN_READING_QUICK : POINTS_COST.HEBAN_READING_DEEP
                       if (balance >= cost) {
-                        const label = readMode === 'quick' ? '快速解读' : '深度解读'
-                        void doConsume(cost, 'consume_heban', `合盘${label} - ${nameA}×${nameB}`).then((ok) => {
-                          if (ok) void startAiReading()
-                        })
+                        void startAiReading().finally(() => { void refreshPoints() })
                       } else {
                         setShowPointsModal(true)
                       }
                     }}
-                    className="w-64 rounded-full border border-amber-400/60 bg-gradient-to-b from-amber-300 to-amber-500 px-6 py-3.5 text-sm font-semibold text-stone-900 shadow-[0_0_24px_rgba(251,191,36,0.35)] transition-all hover:brightness-110 active:scale-[0.97]"
+                    className="w-64 rounded-full border border-amber-400/60 bg-gradient-to-b from-amber-300 to-amber-500 px-6 py-3.5 text-sm font-semibold text-stone-900 shadow-[0_0_24px_rgba(251,191,36,0.35)] transition-all hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <span className="flex items-center justify-center gap-2">
                       <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2"><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>

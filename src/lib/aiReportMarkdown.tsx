@@ -199,7 +199,7 @@ export function AiReportMarkdown({ markdown }: { markdown: string }) {
       ) : null}
       {hasContent ? (
         <h2 className="mb-4 text-center text-lg font-bold tracking-wide text-amber-100 sm:text-xl">
-          AI 大师解读
+          松眠 AI 老师解读
         </h2>
       ) : null}
       {greeting ? (

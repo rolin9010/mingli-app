@@ -5,6 +5,10 @@ import { signOut } from './lib/auth'
 import { saveReading, saveHeBanReading } from './lib/history'
 import { supabase } from './lib/supabase'
 import { clearWizardSnapshot, loadWizardSnapshot, saveWizardSnapshot } from './lib/wizardSession'
+import {
+  buildMiniProgramMeasurementUrl,
+  hasAuthenticatedMiniProgramHistorySession,
+} from './lib/miniProgramEntry'
 import { PointsProvider, usePoints } from './lib/PointsContext'
 import PointsModal from './components/PointsModal'
 import Step1Input from './pages/Step1Input'
@@ -13,6 +17,7 @@ import HeBanInputPage from './pages/HeBanInputPage'
 import AuthPage from './pages/AuthPage'
 import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
+import MiniSessionPage from './pages/MiniSessionPage'
 import HistoryPage from './pages/HistoryPage'
 import type { HeBanResults, HeBanUserInput, ReportResults, UserInput } from './lib/types'
 import PrivateRoute from './components/PrivateRoute'
@@ -136,10 +141,10 @@ function TopNav({
             className="flex shrink-0 items-center gap-2"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm font-bold text-slate-900 shadow-[0_0_12px_rgba(251,191,36,0.4)]">
-              五
+              元
             </span>
             <span className="hidden text-sm font-semibold tracking-wide text-amber-100 sm:block">
-              五行能量
+              元气文化
             </span>
           </button>
 
@@ -304,6 +309,7 @@ function WizardApp({ user }: { user: User | null }) {
   const [results, setResults] = useState<ReportResults | null>(w0.results)
   const [isComputing, setIsComputing] = useState(false)
   const [step1Key, setStep1Key] = useState(0)
+  const singleReadingIdRef = useRef<string | null>(null)
 
   // 合盘状态
   const [heBanStep, setHeBanStep] = useState<1 | 2>(1)
@@ -314,17 +320,34 @@ function WizardApp({ user }: { user: User | null }) {
   const [showAuth, setShowAuth] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [showConsult, setShowConsult] = useState(false)
+  const [showMiniOnboarding, setShowMiniOnboarding] = useState(() =>
+    new URLSearchParams(window.location.search).get('onboarding') === '1',
+  )
 
   // 检测是否从微信小程序 WebView 打开（隐藏顶部导航栏）
   const urlParams = new URLSearchParams(window.location.search)
   const isMiniprogram = urlParams.get('miniprogram') === '1'
-  // 小程序访客历史/详情模式：?miniprogram=1&view=history&uid=<supabase_user_id>&reading_id=<reading_id>
-  const guestHistoryUid = (isMiniprogram && urlParams.get('view') === 'history')
+  // 小程序历史/详情模式：?miniprogram=1&view=history&uid=<supabase_user_id>&reading_id=<reading_id>
+  const miniHistoryUid = (isMiniprogram && urlParams.get('view') === 'history')
     ? (urlParams.get('uid') ?? '')
     : ''
-  const guestReadingId = guestHistoryUid
+  const miniHistoryAuthenticated = hasAuthenticatedMiniProgramHistorySession(
+    miniHistoryUid,
+    user?.id,
+  )
+  // 老链接或会话失效时仍可只读查看，不开放写操作。
+  const guestHistoryUid = miniHistoryUid && !miniHistoryAuthenticated ? miniHistoryUid : ''
+  const miniReadingId = miniHistoryUid
     ? (urlParams.get('reading_id') ?? urlParams.get('id') ?? '')
     : ''
+
+  const returnToMiniMeasurement = useCallback(() => {
+    window.location.replace(buildMiniProgramMeasurementUrl())
+  }, [])
+
+  const startEmptyMiniMeasurement = useCallback(() => {
+    window.location.replace(buildMiniProgramMeasurementUrl(true))
+  }, [])
 
   // 小程序模式：修复各种 WebView 兼容问题
   useEffect(() => {
@@ -364,18 +387,21 @@ function WizardApp({ user }: { user: User | null }) {
     setStep(1)
     setHeBanStep(1)
     setHeBanResults(null)
+    singleReadingIdRef.current = null
     clearWizardSnapshot()
   }
 
-  // 小程序访客历史模式：直接全屏展示历史页，无需登录
-  if (guestHistoryUid) {
+  // 小程序历史模式：有匹配会话时启用完整档案操作，否则只读降级。
+  if (miniHistoryUid) {
     return (
       <div className="min-h-screen">
         <div className="pt-4">
           <HistoryPage
-            onBack={() => { /* webview 里无意义，但接口需要 */ }}
-            guestUid={guestHistoryUid}
-            initialSelectedId={guestReadingId}
+            onBack={returnToMiniMeasurement}
+            onEmpty={startEmptyMiniMeasurement}
+            embeddedInMiniprogram
+            guestUid={guestHistoryUid || undefined}
+            initialSelectedId={miniReadingId}
           />
         </div>
       </div>
@@ -405,6 +431,26 @@ function WizardApp({ user }: { user: User | null }) {
 
       {/* 内容区域：小程序模式不留导航栏高度 */}
       <div className={isMiniprogram ? '' : 'pt-14'}>
+        {isMiniprogram && showMiniOnboarding ? (
+          <div className="border-b border-amber-400/20 bg-amber-400/10 px-4 py-3 text-amber-50">
+            <div className="mx-auto flex max-w-xl items-start gap-3">
+              <div className="flex-1">
+                <p className="text-sm font-semibold">先创建我的元气档案</p>
+                <p className="mt-1 text-xs leading-5 text-amber-100/75">
+                  当前账号还没有档案，请填写资料开始首次测算。新账号已赠送 5 积分，可用于解读。
+                </p>
+              </div>
+              <button
+                type="button"
+                aria-label="关闭提示"
+                onClick={() => setShowMiniOnboarding(false)}
+                className="flex h-7 w-7 shrink-0 items-center justify-center text-lg text-amber-100/70 hover:text-amber-50"
+              >
+                ×
+              </button>
+            </div>
+          </div>
+        ) : null}
         {showHistory ? (
           <HistoryPage onBack={() => setShowHistory(false)} />
         ) : (
@@ -425,6 +471,7 @@ function WizardApp({ user }: { user: User | null }) {
                       try {
                         const { computeAll } = await import('./lib/mingli/computeReport')
                         const res = computeAll(data)
+                        singleReadingIdRef.current = null
                         setInput(data)
                         setResults(res)
                         setStep(2)
@@ -441,9 +488,15 @@ function WizardApp({ user }: { user: User | null }) {
                     <Step3Report
                       input={input}
                       results={results}
-                      onAIReportComplete={async (aiReport) => {
+                      onAIReportComplete={async (aiReport, readMode) => {
                         try {
-                          await saveReading(input, aiReport)
+                          const saved = await saveReading(
+                            input,
+                            aiReport,
+                            readMode,
+                            singleReadingIdRef.current,
+                          )
+                          if (saved?.id) singleReadingIdRef.current = String(saved.id)
                         } catch {
                           /* 静默失败 */
                         }
@@ -551,6 +604,7 @@ export default function App() {
         />
         <Route path="/login" element={<LoginPage />} />
         <Route path="/register" element={<RegisterPage />} />
+        <Route path="/mini-session" element={<MiniSessionPage />} />
         <Route
           path="/admin"
           element={

@@ -1,5 +1,6 @@
 import { Component, useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
+import ReactMarkdown from 'react-markdown'
 
 /** 捕获子树渲染异常，防止整页白屏 */
 class DetailErrorBoundary extends Component<
@@ -29,8 +30,16 @@ import {
   AI_READING_SERIF,
   READING_PANEL_SURFACE_STYLE,
   AiReportMarkdown,
+  aiMarkdownComponents,
   normalizeAiReportMarkdown,
 } from '../lib/aiReportMarkdown'
+import { TOPIC_TABS, parseAiReportTopics, type TopicTabKey } from '../lib/aiReportTopics'
+import { resolveMiniProgramArchiveDestination } from '../lib/miniProgramEntry'
+import {
+  canUpgradeToDeepReading,
+  parseReadingReportVersions,
+  type AiReadingMode,
+} from '../lib/readingReportVersions'
 import {
   deleteReading,
   generateBindingCode,
@@ -38,15 +47,22 @@ import {
   getReadings,
   getReadingsForMiniprogram,
   isHeBanInputData,
+  saveReading,
   setPrimaryReading,
+  updateReadingCalendar,
   updateReadingName,
   type BaziSummary,
   type ReadingDetail,
   type ReadingListItem,
 } from '../lib/history'
+import { buildReadingPrompt, fetchAIReading } from '../lib/ai'
+import { usePoints } from '../lib/PointsContext'
+import { POINTS_COST } from '../lib/points'
+import PointsModal from '../components/PointsModal'
 import { Step2ChartsSection } from './Step2Results'
 import { computeAll } from '../lib/mingli/computeReport'
 import { calcBazi } from '../lib/mingli/bazi'
+import { saveDailyTipProfile } from '../lib/dailyTipProfile'
 import type { HeBanResults, HeBanUserInput, ReportResults, UserInput } from '../lib/types'
 
 /** 根据 input_data 计算四柱，返回「年干支 月干支 日干支 时干支」数组 */
@@ -81,17 +97,109 @@ function getBirthLabel(row: ReadingListItem): string {
   }
 }
 
+function HistoryTopicTabs({ markdown }: { markdown: string }) {
+  const [activeTab, setActiveTab] = useState<TopicTabKey>('greeting')
+  const topics = useMemo(() => parseAiReportTopics(markdown), [markdown])
+  const topicCount = TOPIC_TABS.slice(1).filter((tab) => topics[tab.key].trim()).length
+
+  if (topicCount < 2) {
+    return (
+      <div
+        className="prose prose-invert prose-sm ai-report-prose max-w-none leading-relaxed rounded-2xl border border-amber-900/35 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.06)] sm:p-7"
+        style={{ fontFamily: AI_READING_SERIF, ...READING_PANEL_SURFACE_STYLE }}
+      >
+        <AiReportMarkdown markdown={markdown} />
+      </div>
+    )
+  }
+
+  const currentIndex = TOPIC_TABS.findIndex((tab) => tab.key === activeTab)
+  const prevTab = TOPIC_TABS[currentIndex - 1]
+  const nextTab = TOPIC_TABS[currentIndex + 1]
+
+  return (
+    <div>
+      <div className="mb-1 flex overflow-x-auto [-webkit-overflow-scrolling:touch] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+        <div className="flex min-w-max gap-1.5 pb-2">
+          {TOPIC_TABS.map((tab) => {
+            const isActive = activeTab === tab.key
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => setActiveTab(tab.key)}
+                className={[
+                  'flex shrink-0 items-center gap-1.5 rounded-xl border px-3.5 py-2 text-xs font-medium transition-all',
+                  isActive
+                    ? 'border-amber-400/70 bg-amber-400/20 text-amber-100 shadow-[inset_0_1px_0_rgba(251,191,36,0.15)]'
+                    : 'border-white/10 bg-white/[0.03] text-slate-400 hover:border-white/20 hover:text-slate-200',
+                ].join(' ')}
+              >
+                <span className="text-[13px] leading-none">{tab.icon}</span>
+                <span>{tab.label}</span>
+              </button>
+            )
+          })}
+        </div>
+      </div>
+
+      <div
+        className="rounded-2xl border border-amber-900/35 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.06)] sm:p-7"
+        style={READING_PANEL_SURFACE_STYLE}
+      >
+        <div className="prose prose-invert prose-sm ai-report-prose max-w-none leading-relaxed" style={{ fontFamily: AI_READING_SERIF }}>
+          <ReactMarkdown components={aiMarkdownComponents}>{topics[activeTab]}</ReactMarkdown>
+        </div>
+      </div>
+
+      <div className="mt-4 flex items-center justify-between gap-3">
+        {prevTab ? (
+          <button
+            type="button"
+            onClick={() => setActiveTab(prevTab.key)}
+            className="flex items-center gap-1.5 rounded-xl border border-white/15 bg-white/[0.04] px-4 py-2.5 text-sm font-medium text-slate-300 hover:border-white/25 hover:text-slate-100"
+          >
+            <span>←</span>
+            <span className="text-xs opacity-70">{prevTab.icon} {prevTab.label}</span>
+          </button>
+        ) : <span />}
+        {nextTab ? (
+          <button
+            type="button"
+            onClick={() => setActiveTab(nextTab.key)}
+            className="flex items-center gap-1.5 rounded-xl border border-amber-400/40 bg-amber-400/10 px-4 py-2.5 text-sm font-medium text-amber-100 hover:bg-amber-400/20"
+          >
+            <span className="text-xs opacity-70">{nextTab.icon} {nextTab.label}</span>
+            <span>→</span>
+          </button>
+        ) : <span />}
+      </div>
+    </div>
+  )
+}
+
 export interface HistoryPageProps {
   onBack: () => void
+  /** 小程序访客没有任何个人档案时，直接进入新建测算流程 */
+  onEmpty?: () => void
   /** 小程序访客模式：传入 supabase user_id，免登录查看该用户的历史记录（只读） */
   guestUid?: string
   /** 小程序访客模式：传入当前小程序展示的 readings.id，直接打开该详情 */
   initialSelectedId?: string
+  /** 位于小程序 WebView 中，仅用于交互和跳转，不代表拥有写权限 */
+  embeddedInMiniprogram?: boolean
 }
 
-export default function HistoryPage({ onBack, guestUid, initialSelectedId }: HistoryPageProps) {
+export default function HistoryPage({
+  onBack,
+  onEmpty,
+  guestUid,
+  initialSelectedId,
+  embeddedInMiniprogram = false,
+}: HistoryPageProps) {
   /** 是否为小程序访客只读模式 */
   const isGuest = Boolean(guestUid)
+  const { balance, refresh: refreshPoints } = usePoints()
   const [list, setList] = useState<ReadingListItem[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [listError, setListError] = useState('')
@@ -99,6 +207,7 @@ export default function HistoryPage({ onBack, guestUid, initialSelectedId }: His
   const [detail, setDetail] = useState<ReadingDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
+  const [reportMode, setReportMode] = useState<AiReadingMode>('quick')
 
   // 设为主档案相关状态
   const [primaryId, setPrimaryId] = useState<string | null>(() => {
@@ -135,6 +244,10 @@ export default function HistoryPage({ onBack, guestUid, initialSelectedId }: His
   const [nameInput, setNameInput] = useState('')
   const [nameLoading, setNameLoading] = useState(false)
   const [nameError, setNameError] = useState('')
+  const [calendarSaving, setCalendarSaving] = useState(false)
+  const [deepUpgradeLoading, setDeepUpgradeLoading] = useState(false)
+  const [deepUpgradeError, setDeepUpgradeError] = useState('')
+  const [showPointsModal, setShowPointsModal] = useState(false)
 
   // 单人排盘
   const [computedResults, setComputedResults] = useState<ReportResults | null>(null)
@@ -171,10 +284,18 @@ export default function HistoryPage({ onBack, guestUid, initialSelectedId }: His
         if (!cancelled) {
           setList(rows)
           const personalRows = rows.filter((row) => !isHeBanInputData(row.input_data ?? null))
+          if (
+            embeddedInMiniprogram
+            && resolveMiniProgramArchiveDestination(personalRows.length) === 'measurement'
+            && onEmpty
+          ) {
+            onEmpty()
+            return
+          }
           // 找出已标记的主档案
           const primary = (personalRows as (ReadingListItem & { is_primary?: boolean })[]).find(r => r.is_primary)
           if (primary) setPrimaryId(primary.id)
-          if (isGuest && initialSelectedId) {
+          if (embeddedInMiniprogram) {
             const target = personalRows.find(row => row.id === initialSelectedId) ?? primary ?? personalRows[0]
             if (target) {
               setSelectedId(target.id)
@@ -192,7 +313,7 @@ export default function HistoryPage({ onBack, guestUid, initialSelectedId }: His
     return () => {
       cancelled = true
     }
-  }, [guestUid, initialSelectedId, isGuest])
+  }, [embeddedInMiniprogram, guestUid, initialSelectedId, onEmpty])
 
   useEffect(() => {
     if (!selectedId) {
@@ -292,10 +413,15 @@ export default function HistoryPage({ onBack, guestUid, initialSelectedId }: His
     return () => { cancelled = true }
   }, [detail?.input_data, isHeBan])
 
+  const reportVersions = useMemo(
+    () => parseReadingReportVersions(detail?.ai_report),
+    [detail?.ai_report],
+  )
+
   const displayMd = useMemo(() => {
-    const raw = detail?.ai_report ?? ''
+    const raw = reportVersions[reportMode] ?? reportVersions.deep ?? reportVersions.quick ?? ''
     return normalizeAiReportMarkdown(raw)
-  }, [detail?.ai_report])
+  }, [reportMode, reportVersions])
 
   // 仅保留个人档案（过滤合盘）—— 必须在 if (selectedId) return 之前调用，确保 Hook 顺序稳定
   const personalList = useMemo(
@@ -380,6 +506,85 @@ export default function HistoryPage({ onBack, guestUid, initialSelectedId }: His
       setNameError(e instanceof Error ? e.message : '修改失败')
     } finally {
       setNameLoading(false)
+    }
+  }
+
+  const handleCalendarChange = async (calendarType: '公历' | '农历') => {
+    if (!selectedId || !detail?.input_data || isHeBan) return
+    const currentInput = detail.input_data as UserInput
+    if ((currentInput.calendarType ?? '公历') === calendarType) return
+    if (!window.confirm('切换日历会按新的日期体系重新计算档案，原 AI 解读将失效并可重新生成。继续吗？')) return
+
+    setCalendarSaving(true)
+    setNameError('')
+    try {
+      const nextInput: UserInput = { ...currentInput, calendarType }
+      const bazi = calcBazi(nextInput.birth, calendarType, nextInput)
+      const result = computeAll(nextInput)
+      const baziSummary: BaziSummary = {
+        pillars: bazi.pillars,
+        elements: result.bazi.elements.map((item) => ({ element: item.element, percent: item.percent })),
+      }
+      const birthDate = `${nextInput.birth.year}-${String(nextInput.birth.month).padStart(2, '0')}-${String(nextInput.birth.day).padStart(2, '0')}`
+
+      await updateReadingCalendar(selectedId, nextInput, baziSummary)
+      // 每日文化日课读取同一份资料；同步失败不应回滚已保存的档案。
+      void saveDailyTipProfile(nextInput).catch((error) => console.warn('同步日课资料失败:', error))
+
+      setDetail((prev) => prev ? {
+        ...prev,
+        input_data: nextInput,
+        birth_date: birthDate,
+        ai_report: null,
+      } : prev)
+      setList((prev) => prev?.map((row) => row.id === selectedId ? {
+        ...row,
+        input_data: nextInput,
+        birth_date: birthDate,
+        ai_report: null,
+      } : row) ?? null)
+    } catch (error: unknown) {
+      setNameError(error instanceof Error ? error.message : '日历切换失败，请重试')
+    } finally {
+      setCalendarSaving(false)
+    }
+  }
+
+  const handleDeepUpgrade = async () => {
+    if (
+      isGuest
+      || !selectedId
+      || !detail?.input_data
+      || isHeBan
+      || !computedResults
+      || !canUpgradeToDeepReading(detail.ai_report)
+    ) return
+
+    if (balance < POINTS_COST.AI_READING_DEEP) {
+      setShowPointsModal(true)
+      return
+    }
+
+    setDeepUpgradeLoading(true)
+    setDeepUpgradeError('')
+    try {
+      const input = detail.input_data as UserInput
+      const prompt = buildReadingPrompt(input, computedResults, 'deep')
+      const deepReport = await fetchAIReading(prompt, 'deep')
+      const saved = await saveReading(input, deepReport, 'deep', selectedId)
+      const mergedReport = typeof saved?.ai_report === 'string' ? saved.ai_report : null
+      if (!mergedReport) throw new Error('深度解读已生成，但档案保存失败，请重试')
+
+      setDetail((prev) => prev ? { ...prev, ai_report: mergedReport } : prev)
+      setList((prev) => prev?.map((row) => (
+        row.id === selectedId ? { ...row, ai_report: mergedReport } : row
+      )) ?? null)
+      setReportMode('deep')
+    } catch (error: unknown) {
+      setDeepUpgradeError(error instanceof Error ? error.message : '深度解读失败，请重试')
+    } finally {
+      setDeepUpgradeLoading(false)
+      void refreshPoints()
     }
   }
 
@@ -475,6 +680,32 @@ export default function HistoryPage({ onBack, guestUid, initialSelectedId }: His
               <span>·</span>
               <span>{detail.created_at ? new Date(detail.created_at).toLocaleString() : '—'}</span>
             </div>
+            {!isGuest && !isHeBan && detail.input_data ? (
+              <div className="mt-4 border-t border-white/10 pt-3">
+                <p className="mb-2 text-xs text-slate-400">出生日期按哪种日历填写</p>
+                <div className="flex gap-2">
+                  {(['公历', '农历'] as const).map((calendarType) => {
+                    const active = (detail.input_data as UserInput).calendarType ?? '公历'
+                    return (
+                      <button
+                        key={calendarType}
+                        type="button"
+                        disabled={calendarSaving || active === calendarType}
+                        onClick={() => void handleCalendarChange(calendarType)}
+                        className={`rounded-lg border px-3 py-1.5 text-xs transition ${
+                          active === calendarType
+                            ? 'border-amber-400/45 bg-amber-400/15 text-amber-100'
+                            : 'border-white/10 bg-white/[0.04] text-slate-400 hover:border-amber-400/35 hover:text-amber-100'
+                        } disabled:opacity-60`}
+                      >
+                        {calendarSaving && active !== calendarType ? '切换中…' : calendarType}
+                      </button>
+                    )
+                  })}
+                </div>
+                <p className="mt-2 text-[11px] leading-5 text-slate-500">切换后会重新计算档案，原 AI 解读需要重新生成。</p>
+              </div>
+            ) : null}
           </div>
         ) : null}
 
@@ -527,15 +758,54 @@ export default function HistoryPage({ onBack, guestUid, initialSelectedId }: His
         {!detailLoading && !detailError && detail ? (
           <DetailErrorBoundary>
             <div className="mt-6 w-full">
-              <div
-                className="prose prose-invert prose-sm ai-report-prose max-w-none leading-relaxed rounded-2xl border border-amber-900/35 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.06)] sm:p-7"
-                style={{ fontFamily: AI_READING_SERIF, ...READING_PANEL_SURFACE_STYLE }}
-              >
-                <AiReportMarkdown markdown={displayMd || detail.ai_report || ''} />
-              </div>
+              {reportVersions.quick && reportVersions.deep ? (
+                <div className="mb-4 flex rounded-xl border border-white/10 bg-white/[0.04] p-1">
+                  {(['quick', 'deep'] as const).map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      onClick={() => setReportMode(mode)}
+                      className={`min-h-10 flex-1 rounded-lg px-3 py-2 text-sm font-medium transition ${
+                        reportMode === mode
+                          ? 'bg-amber-400/20 text-amber-100'
+                          : 'text-slate-400 hover:text-slate-200'
+                      }`}
+                    >
+                      {mode === 'quick' ? '普通解读' : '深度解读'}
+                    </button>
+                  ))}
+                </div>
+              ) : null}
+              <HistoryTopicTabs
+                key={`${selectedId}-${reportMode}-${displayMd.length}`}
+                markdown={displayMd}
+              />
+              {!isGuest && !isHeBan && canUpgradeToDeepReading(detail.ai_report) ? (
+                <div className="mt-5 rounded-2xl border border-amber-400/25 bg-amber-400/[0.07] p-5 text-center">
+                  <p className="text-sm font-medium text-amber-100">继续查看更完整的主题分析</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-400">普通解读会保留，深度解读将增加情绪、人际、事业、身体养护与行动建议。</p>
+                  <button
+                    type="button"
+                    onClick={() => void handleDeepUpgrade()}
+                    disabled={deepUpgradeLoading || computedLoading || !computedResults}
+                    className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full border border-amber-400/55 bg-amber-400/15 px-6 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/25 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-55"
+                  >
+                    {deepUpgradeLoading
+                      ? '正在生成深度解读…'
+                      : `继续深度解读（${POINTS_COST.AI_READING_DEEP}积分）`}
+                  </button>
+                  {deepUpgradeError ? <p className="mt-3 text-xs text-rose-300">{deepUpgradeError}</p> : null}
+                </div>
+              ) : null}
             </div>
           </DetailErrorBoundary>
         ) : null}
+
+        <PointsModal
+          open={showPointsModal}
+          onClose={() => setShowPointsModal(false)}
+          defaultTab="buy"
+        />
 
         {/* 删除确认弹窗 */}
         {deletingId && (
@@ -581,7 +851,7 @@ export default function HistoryPage({ onBack, guestUid, initialSelectedId }: His
       <h2 className="mb-6 text-lg font-semibold tracking-wide text-amber-100">历史档案</h2>
 
       {/* 绑定小程序入口（访客模式不显示） */}
-      {!isGuest && <div className="mb-5">
+      {!isGuest && !embeddedInMiniprogram && <div className="mb-5">
         <button
           type="button"
           onClick={() => setShowBindingPanel(v => !v)}

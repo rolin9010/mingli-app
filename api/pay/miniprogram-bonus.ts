@@ -60,7 +60,7 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
 
     if (bindingError) throw new Error(`绑定关系查询失败: ${bindingError.message}`)
     if (!binding?.user_id) {
-      return res.status(409).json({ error: '请先绑定 wuxingme 账号后领取积分' })
+      return res.status(409).json({ error: '请先开通或关联元气文化账号后领取积分' })
     }
 
     await creditPointsForOrder(

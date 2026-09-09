@@ -80,11 +80,22 @@ export function computeBaziContext(
     minute = corrected.minute
   }
 
-  const date = new Date(year, month - 1, day, hour, minute, 0)
+  // 晚子时（23:00–00:59）按次日计算日柱；时柱仍为子时。
+  // 只调整八字换日，不改变返回的墙钟时间，避免影响其他计算模块。
+  const baziDate = hour === 23
+    ? new Date(year, month - 1, day + 1, 0, minute, 0)
+    : new Date(year, month - 1, day, hour, minute, 0)
   const lunar =
     typeof (Lunar as any)?.fromDate === 'function'
-      ? (Lunar as any).fromDate(date)
-      : Solar.fromYmdHms(year, month, day, hour, minute, 0).getLunar()
+      ? (Lunar as any).fromDate(baziDate)
+      : Solar.fromYmdHms(
+        baziDate.getFullYear(),
+        baziDate.getMonth() + 1,
+        baziDate.getDate(),
+        baziDate.getHours(),
+        baziDate.getMinutes(),
+        0,
+      ).getLunar()
 
   const eightChar = lunar.getEightChar()
   return {

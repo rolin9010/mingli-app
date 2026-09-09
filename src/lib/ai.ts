@@ -68,6 +68,11 @@ export async function* fetchAIReadingStream(
     throw new Error(msg)
   }
 
+  const pointsBalance = Number(res.headers.get('X-Points-Balance'))
+  if (Number.isInteger(pointsBalance) && pointsBalance >= 0) {
+    window.dispatchEvent(new CustomEvent('points-balance-updated', { detail: pointsBalance }))
+  }
+
   const reader = res.body?.getReader()
   if (!reader) throw new Error('无法读取响应流')
   const decoder = new TextDecoder()
@@ -217,7 +222,7 @@ const SYSTEM_PROMPT = `# 角色设定
 
 /**
  * 非流式调用（兼容旧调用方，内部把流式内容拼接后返回）
- * 注意：此函数仍需登录，且会扣积分
+ * 注意：此函数仍需登录；仅在服务端成功生成有效正文后才会扣积分
  */
 export async function fetchAIReading(prompt: string, mode: 'quick' | 'deep' = 'quick'): Promise<string> {
   let result = ''

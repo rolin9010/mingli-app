@@ -78,13 +78,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         'Authorization': `Bearer ${deepseekKey}`,
       },
       body: JSON.stringify({
-        model: 'deepseek-chat',
+        model: 'deepseek-v4-flash',
         messages: [
           { role: 'system', content: DAILY_TIP_SYSTEM_PROMPT },
           { role: 'user', content: prompt },
         ],
-        temperature: 0.9,
-        max_tokens: 300,
+        thinking: { type: 'disabled' },
+        temperature: 1.1,
+        max_tokens: 180,
       }),
     })
 

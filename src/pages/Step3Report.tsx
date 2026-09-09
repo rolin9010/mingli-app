@@ -8,6 +8,7 @@ import {
   normalizeAiReportMarkdown,
   parseAiOpeningBlocks,
 } from '../lib/aiReportMarkdown'
+import { TOPIC_TABS, parseAiReportTopics, type TopicTabKey } from '../lib/aiReportTopics'
 import { fetchAIReading, buildReadingPrompt } from '../lib/ai'
 import {
   clearCachedAiReport,
@@ -23,70 +24,6 @@ import type { ReportResults, UserInput } from '../lib/types'
 import { Step2ChartsSection } from './Step2Results'
 // DailyTip 仅在松眠小程序使用，wuxingme.cn 不展示
 // import DailyTip from '../components/DailyTip'
-
-// ─── Tab 主题定义 ──────────────────────────────────────────────────────────────
-
-const TOPIC_TABS = [
-  { key: 'greeting', label: '开篇', icon: '✦' },
-  { key: 'topic1',   label: '能量画像', icon: '🌊' },
-  { key: 'topic2',   label: '情绪特点', icon: '💫' },
-  { key: 'topic3',   label: '人际关系', icon: '🤝' },
-  { key: 'topic4',   label: '事业方向', icon: '🧭' },
-  { key: 'topic5',   label: '子女相关', icon: '🌱' },
-  { key: 'topic6',   label: '身体养护', icon: '🌿' },
-  { key: 'topic7',   label: '行动指南', icon: '🌙' },
-] as const
-
-type TabKey = (typeof TOPIC_TABS)[number]['key']
-
-/** 将 AI markdown 拆分为开篇 + 七主题 */
-function parseTopics(markdown: string): Record<TabKey, string> {
-  const normalized = normalizeAiReportMarkdown(markdown)
-  const { headerNote, greeting, rest } = parseAiOpeningBlocks(normalized)
-
-  // 开篇 tab：headerNote 小字 + 问候段
-  const greetingParts: string[] = []
-  if (headerNote) greetingParts.push(`*${headerNote}*`)
-  if (greeting) greetingParts.push(greeting)
-  const greetingContent = greetingParts.join('\n\n')
-
-  // 按 ### 主题N: 拆分七个主题
-  const sections: Record<string, string> = {}
-  // 匹配 ### 主题1/一 … ### 主题7/七
-  const chineseNums: Record<string, string> = { '一': '1', '二': '2', '三': '3', '四': '4', '五': '5', '六': '6', '七': '7' }
-
-  // 按 ### 主题[数字/汉字] 分割
-  const topicRegex = /###\s*主题[一二三四五六七1-7][：:：]?[^\n]*/g
-  const matches: { index: number; title: string; num: string }[] = []
-
-  let m: RegExpExecArray | null
-  while ((m = topicRegex.exec(rest)) !== null) {
-    const titleText = m[0]
-    const numMatch = titleText.match(/主题([一二三四五六七1-7])/)
-    if (!numMatch) continue
-    const rawNum = numMatch[1]!
-    const num = chineseNums[rawNum] ?? rawNum
-    matches.push({ index: m.index, title: titleText, num })
-  }
-
-  for (let i = 0; i < matches.length; i++) {
-    const start = matches[i]!.index
-    const end = i + 1 < matches.length ? matches[i + 1]!.index : rest.length
-    const content = rest.slice(start, end).trim()
-    sections[matches[i]!.num] = content
-  }
-
-  return {
-    greeting: greetingContent || '（AI 还未生成开篇内容）',
-    topic1: sections['1'] ?? '',
-    topic2: sections['2'] ?? '',
-    topic3: sections['3'] ?? '',
-    topic4: sections['4'] ?? '',
-    topic5: sections['5'] ?? '',
-    topic6: sections['6'] ?? '',
-    topic7: sections['7'] ?? '',
-  }
-}
 
 // ─── 加载动画 ──────────────────────────────────────────────────────────────────
 
@@ -114,7 +51,7 @@ function AiMasterLoading({ estimatedSeconds }: { estimatedSeconds: number }) {
         />
       </div>
       <div className="space-y-2">
-        <p className="text-xl font-semibold tracking-wide text-amber-100 sm:text-2xl">AI 大师解读中</p>
+        <p className="text-xl font-semibold tracking-wide text-amber-100 sm:text-2xl">松眠 AI 老师解读中</p>
         <p className="text-sm text-slate-300/90">
           {remain > 0 ? (
             <>倒计时 {remain} 秒</>
@@ -167,14 +104,14 @@ export default function Step3Report({
 }: {
   input: UserInput
   results: ReportResults
-  onAIReportComplete?: (aiReport: string) => void | Promise<void>
+  onAIReportComplete?: (aiReport: string, mode: 'quick' | 'deep') => void | Promise<void>
 }) {
   const baseFingerprint = useMemo(() => computeAiReportFingerprint(input), [input])
   const [readMode, setReadMode] = useState<'quick' | 'deep'>('quick')
   // 缓存 key 区分快速/深度，避免共用同一份缓存
   const reportFingerprint = useMemo(() => `${baseFingerprint}_${readMode}`, [baseFingerprint, readMode])
 
-  const { balance, doConsume } = usePoints()
+  const { balance, refresh: refreshPoints } = usePoints()
   const [showPointsModal, setShowPointsModal] = useState(false)
   const [aiContent, setAiContent] = useState(() => getCachedAiReport(`${computeAiReportFingerprint(input)}_quick`) ?? '')
   const [aiPhase, setAiPhase] = useState<'idle' | 'loading' | 'done' | 'error'>(() =>
@@ -182,11 +119,13 @@ export default function Step3Report({
   )
   const [aiError, setAiError] = useState('')
   const [aiLoadGen, setAiLoadGen] = useState(0)
-  const [activeTab, setActiveTab] = useState<TabKey>('greeting')
+  const [activeTab, setActiveTab] = useState<TopicTabKey>('greeting')
   const [consultOpen, setConsultOpen] = useState(false)
   const tabTopRef = useRef<HTMLDivElement>(null)
+  const aiRequestInFlight = useRef(false)
+  const requestedModeRef = useRef<'quick' | 'deep' | null>(null)
 
-  const switchTab = (key: TabKey) => {
+  const switchTab = (key: TopicTabKey) => {
     setActiveTab(key)
     setTimeout(() => {
       tabTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
@@ -195,6 +134,7 @@ export default function Step3Report({
 
   /** 指纹或模式切换时，检查对应缓存 */
   useEffect(() => {
+    if (aiRequestInFlight.current && requestedModeRef.current === readMode) return
     const cached = getCachedAiReport(reportFingerprint)
     if (cached) {
       setAiContent(cached)
@@ -206,7 +146,7 @@ export default function Step3Report({
       setAiError('')
     }
     setActiveTab('greeting')
-  }, [reportFingerprint])
+  }, [readMode, reportFingerprint])
 
   useEffect(() => {
     const id = 'mingli-font-noto-serif-sc'
@@ -227,43 +167,68 @@ export default function Step3Report({
   /** 按主题拆分 */
   const topics = useMemo(() => {
     if (!aiContent) return null
-    return parseTopics(aiContent)
+    return parseAiReportTopics(aiContent)
   }, [aiContent])
 
-  const startAiReading = async (options?: { force?: boolean }) => {
+  const startAiReading = async (
+    targetMode: 'quick' | 'deep' = readMode,
+    options?: { force?: boolean },
+  ) => {
+    if (aiRequestInFlight.current) return
+    const targetFingerprint = `${baseFingerprint}_${targetMode}`
     const force = options?.force === true
     if (!force) {
-      const cached = getCachedAiReport(reportFingerprint)
+      const cached = getCachedAiReport(targetFingerprint)
       if (cached) {
+        setReadMode(targetMode)
         setAiContent(cached)
         setAiPhase('done')
         setAiError('')
         return
       }
     } else {
-      clearCachedAiReport(reportFingerprint)
+      clearCachedAiReport(targetFingerprint)
     }
+    aiRequestInFlight.current = true
+    requestedModeRef.current = targetMode
+    setReadMode(targetMode)
     setAiLoadGen((g) => g + 1)
     setAiPhase('loading')
     setAiError('')
     setAiContent('')
     try {
-      const prompt = buildReadingPrompt(input, results, readMode)
-const text = await fetchAIReading(prompt)
+      const prompt = buildReadingPrompt(input, results, targetMode)
+      const text = await fetchAIReading(prompt, targetMode)
                 setAiContent(text)
                 setAiPhase('done')
                 setActiveTab('greeting')
                 setTimeout(() => {
                   tabTopRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
                 }, 50)
-                setCachedAiReport(reportFingerprint, text)
+                setCachedAiReport(targetFingerprint, text)
       try {
-        await onAIReportComplete?.(text)
+        await onAIReportComplete?.(text, targetMode)
       } catch { /* 静默失败 */ }
     } catch (e: unknown) {
       setAiError(e instanceof Error ? e.message : '解读失败，请重试')
       setAiPhase('error')
+    } finally {
+      aiRequestInFlight.current = false
+      requestedModeRef.current = null
     }
+  }
+
+  const openDeepReading = () => {
+    const deepFingerprint = `${baseFingerprint}_deep`
+    if (getCachedAiReport(deepFingerprint)) {
+      setReadMode('deep')
+      return
+    }
+    if (balance < POINTS_COST.AI_READING_DEEP) {
+      setShowPointsModal(true)
+      return
+    }
+    void startAiReading('deep').finally(() => { void refreshPoints() })
   }
 
   const reportCover = (
@@ -312,17 +277,16 @@ const text = await fetchAIReading(prompt)
                   <button
                     type="button"
                     onClick={() => {
+                      if (isLoading) return
                       const cost = readMode === 'quick' ? POINTS_COST.AI_READING_QUICK : POINTS_COST.AI_READING_DEEP
                       if (balance >= cost) {
-                        const label = readMode === 'quick' ? '快速解读' : '深度解读'
-                        void doConsume(cost, 'consume_ai', `AI${label} - ${input.name}`).then((ok) => {
-                          if (ok) void startAiReading()
-                        })
+                        void startAiReading(readMode).finally(() => { void refreshPoints() })
                       } else {
                         setShowPointsModal(true)
                       }
                     }}
-                    className="w-64 rounded-full border border-amber-400/60 bg-gradient-to-b from-amber-300 to-amber-500 px-6 py-3.5 text-sm font-semibold text-stone-900 shadow-[0_0_24px_rgba(251,191,36,0.35)] transition-all hover:brightness-110 active:scale-[0.97]"
+                    disabled={isLoading}
+                    className="w-64 rounded-full border border-amber-400/60 bg-gradient-to-b from-amber-300 to-amber-500 px-6 py-3.5 text-sm font-semibold text-stone-900 shadow-[0_0_24px_rgba(251,191,36,0.35)] transition-all hover:brightness-110 active:scale-[0.97] disabled:cursor-not-allowed disabled:opacity-60"
                   >
                     <span className="flex items-center justify-center gap-2">
                       <svg viewBox="0 0 24 24" fill="none" className="h-4 w-4" stroke="currentColor" strokeWidth="2"><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
@@ -380,7 +344,7 @@ const text = await fetchAIReading(prompt)
                   {aiError}
                   <button
                     type="button"
-                    onClick={() => void startAiReading()}
+                    onClick={() => void startAiReading(readMode)}
                     className="ml-3 underline hover:text-rose-100"
                   >
                     重试
@@ -397,8 +361,23 @@ const text = await fetchAIReading(prompt)
                   rest,
                 ].filter(Boolean).join('\n\n')
                 return (
-                  <div ref={tabTopRef} className="rounded-2xl border border-amber-900/35 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.06)] sm:p-6" style={READING_PANEL_SURFACE_STYLE}>
-                    <TabContent markdown={fullText} />
+                  <div ref={tabTopRef} className="space-y-5">
+                    <div className="rounded-2xl border border-amber-900/35 p-5 shadow-[inset_0_1px_0_rgba(251,191,36,0.06)] sm:p-6" style={READING_PANEL_SURFACE_STYLE}>
+                      <TabContent markdown={fullText} />
+                    </div>
+                    <div className="rounded-2xl border border-amber-400/25 bg-amber-400/[0.07] p-5 text-center">
+                      <p className="text-sm font-medium text-amber-100">想继续了解更完整的主题分析？</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-400">深度解读会补充情绪、人际、事业、身体养护与行动建议，普通版仍会保留。</p>
+                      <button
+                        type="button"
+                        onClick={openDeepReading}
+                        className="mt-4 inline-flex min-h-11 items-center justify-center rounded-full border border-amber-400/55 bg-amber-400/15 px-6 py-2.5 text-sm font-semibold text-amber-100 transition hover:bg-amber-400/25 active:scale-[0.98]"
+                      >
+                        {getCachedAiReport(`${baseFingerprint}_deep`)
+                          ? '查看已有深度解读'
+                          : `继续深度解读（${POINTS_COST.AI_READING_DEEP}积分）`}
+                      </button>
+                    </div>
                   </div>
                 )
               })() : null}

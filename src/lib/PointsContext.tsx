@@ -3,10 +3,7 @@ import { supabase } from './supabase'
 import {
   loadPointsState,
   checkIn,
-  consumePoints,
-  rechargePoints,
   type PointsState,
-  type PointsRecord,
 } from './points'
 
 // ─── Context 类型 ─────────────────────────────────────────────────────────────
@@ -16,10 +13,6 @@ interface PointsContextValue extends PointsState {
   loading: boolean
   /** 签到，返回是否成功 */
   doCheckIn: () => Promise<boolean>
-  /** 消耗积分，返回是否成功 */
-  doConsume: (cost: number, type: PointsRecord['type'], description: string) => Promise<boolean>
-  /** 充值积分（测试用；生产环境由支付回调触发） */
-  doRecharge: (amount: number) => Promise<void>
   /** 手动刷新积分状态 */
   refresh: () => Promise<void>
 }
@@ -58,10 +51,13 @@ export function PointsProvider({ children }: { children: ReactNode }) {
     void syncFromServer()
 
     // 监听认证状态变化：登录 → 拉取云端积分；登出 → 重置为默认
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED') {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (
+        (event === 'INITIAL_SESSION' || event === 'SIGNED_IN' || event === 'TOKEN_REFRESHED')
+        && session?.user
+      ) {
         void syncFromServer()
-      } else if (event === 'SIGNED_OUT') {
+      } else if (event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && !session)) {
         setState(DEFAULT_STATE)
         setLoading(false)
       }
@@ -70,76 +66,41 @@ export function PointsProvider({ children }: { children: ReactNode }) {
     return () => subscription.unsubscribe()
   }, [syncFromServer])
 
+  // 从小程序、支付页或后台切回时重新读取，避免展示旧会话中的缓存余额。
+  useEffect(() => {
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === 'visible') void syncFromServer()
+    }
+    const refreshOnPageShow = () => void syncFromServer()
+    document.addEventListener('visibilitychange', refreshWhenVisible)
+    window.addEventListener('pageshow', refreshOnPageShow)
+    return () => {
+      document.removeEventListener('visibilitychange', refreshWhenVisible)
+      window.removeEventListener('pageshow', refreshOnPageShow)
+    }
+  }, [syncFromServer])
+
+  useEffect(() => {
+    const handleBalanceUpdated = (event: Event) => {
+      const balance = Number((event as CustomEvent<number>).detail)
+      if (!Number.isInteger(balance) || balance < 0) return
+      setState((prev) => ({ ...prev, balance }))
+    }
+    window.addEventListener('points-balance-updated', handleBalanceUpdated)
+    return () => window.removeEventListener('points-balance-updated', handleBalanceUpdated)
+  }, [])
+
   // ── 操作方法 ──────────────────────────────────────────────────────────────
 
   const doCheckIn = useCallback(async (): Promise<boolean> => {
     if (state.checkedInToday) return false
     const result = await checkIn()
     if (result.success) {
-      setState((prev) => {
-        const record: PointsRecord = {
-          id: Date.now().toString(36),
-          type: 'checkin',
-          amount: result.reward,
-          description: `每日签到（连续${result.newStreak}天）`,
-          createdAt: new Date().toISOString(),
-        }
-        return {
-          ...prev,
-          balance: prev.balance + result.reward,
-          checkedInToday: true,
-          checkInStreak: result.newStreak,
-          records: [record, ...prev.records],
-        }
-      })
+      // 以数据库返回和新流水为准，避免本地缓存显示 0 或重复累加。
+      await syncFromServer()
     }
     return result.success
-  }, [state.checkedInToday])
-
-  const doConsume = useCallback(
-    async (cost: number, type: PointsRecord['type'], description: string): Promise<boolean> => {
-      if (state.balance < cost) return false
-      const result = await consumePoints(cost, type, description)
-      if (result.success) {
-        setState((prev) => {
-          const record: PointsRecord = {
-            id: Date.now().toString(36),
-            type,
-            amount: -cost,
-            description,
-            createdAt: new Date().toISOString(),
-          }
-          return {
-            ...prev,
-            balance: prev.balance - cost,
-            records: [record, ...prev.records],
-          }
-        })
-      }
-      return result.success
-    },
-    [state.balance],
-  )
-
-  const doRecharge = useCallback(async (amount: number): Promise<void> => {
-    const result = await rechargePoints(amount)
-    if (result.success) {
-      setState((prev) => {
-        const record: PointsRecord = {
-          id: Date.now().toString(36),
-          type: 'recharge',
-          amount,
-          description: `充值${amount}积分`,
-          createdAt: new Date().toISOString(),
-        }
-        return {
-          ...prev,
-          balance: prev.balance + amount,
-          records: [record, ...prev.records],
-        }
-      })
-    }
-  }, [])
+  }, [state.checkedInToday, syncFromServer])
 
   const refresh = useCallback(async () => {
     await syncFromServer()
@@ -151,8 +112,6 @@ export function PointsProvider({ children }: { children: ReactNode }) {
         ...state,
         loading,
         doCheckIn,
-        doConsume,
-        doRecharge,
         refresh,
       }}
     >
