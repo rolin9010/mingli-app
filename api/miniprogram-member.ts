@@ -17,10 +17,60 @@ import {
   parseVirtualPaymentProxyPlanId,
   queryVirtualPaymentOrder,
 } from './pay/_virtual-payment.js'
-import { issueSignedToken, presignUrl } from '@vercel/blob'
-import { resolveRelaxAudioFile } from './_signed.js'
+import { get } from '@vercel/blob'
+import { buildAudioStreamUrl, getRelaxAudioBlobPath, resolveRelaxAudioFile, verifyAudioSig } from './_signed.js'
 
 const AUDIO_URL_TTL_MS = Number(process.env.AUDIO_URL_TTL_MS || 60 * 60 * 1000)
+
+function parseRange(range: string | undefined, size: number): { start: number; end: number } {
+  if (!range) return { start: 0, end: size - 1 }
+  const match = /bytes=(\d*)-(\d*)/.exec(range)
+  if (!match) return { start: 0, end: size - 1 }
+  const start = match[1] ? parseInt(match[1], 10) : 0
+  const end = match[2] ? parseInt(match[2], 10) : size - 1
+  return {
+    start: Math.min(start, size - 1),
+    end: Math.min(end, size - 1),
+  }
+}
+
+async function handleAudioStream(req: VercelRequest, res: VercelResponse) {
+  const fileId = String(req.query?.file || '')
+  const exp = Number(req.query?.exp || 0)
+  const sig = String(req.query?.sig || '')
+
+  if (!fileId || !exp || !sig) return res.status(403).json({ error: 'MISSING' })
+  if (Date.now() > exp) return res.status(403).json({ error: 'EXPIRED' })
+  if (!verifyAudioSig(fileId, exp, sig)) return res.status(403).json({ error: 'BAD_SIG' })
+
+  const pathname = getRelaxAudioBlobPath(fileId)
+  if (!pathname) return res.status(404).json({ error: 'NOT_FOUND' })
+
+  try {
+    const token = process.env.BLOB_READ_WRITE_TOKEN || ''
+    const result = await get(pathname, { token, access: 'private' })
+    if (result.statusCode !== 200) return res.status(500).json({ error: '音频加载失败' })
+
+    const buf = Buffer.from(await new Response(result.stream).arrayBuffer())
+    const size = buf.length
+    const rangeHeader = typeof req.headers.range === 'string' ? req.headers.range : undefined
+    const { start, end } = parseRange(rangeHeader, size)
+    const partial = !!rangeHeader
+
+    if (start > end) return res.status(416).json({ error: 'RANGE' })
+    res.status(partial ? 206 : 200)
+    res.setHeader('Content-Type', result.blob.contentType || 'audio/mp4')
+    res.setHeader('Accept-Ranges', 'bytes')
+    res.setHeader('Cache-Control', 'no-store')
+    if (partial) res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`)
+    res.setHeader('Content-Length', end - start + 1)
+    res.send(buf.subarray(start, end + 1))
+  } catch (error) {
+    console.error('[miniprogram] audio stream failed:', error)
+    if (!res.headersSent) return res.status(500).json({ error: '音频加载失败' })
+    return res.end()
+  }
+}
 
 function getShanghaiDateKey(now = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -93,6 +143,9 @@ async function checkInForActiveMember(supabase: SupabaseClient<any>, userId: str
 }
 
 export default async function handler(req: VercelRequest, res: VercelResponse) {
+  if (req.method === 'GET' && req.query?.action === 'audio') {
+    return handleAudioStream(req, res)
+  }
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' })
 
   const supabaseUrl = process.env.SUPABASE_URL
@@ -221,24 +274,9 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       return res.status(403).json({ error: '需开通松眠会员才能畅听放松音频' })
     }
     const audioId = typeof req.body?.audioId === 'string' ? req.body.audioId.trim() : ''
-    const file = resolveRelaxAudioFile(audioId)
-    if (!file) return res.status(400).json({ error: '无效音频' })
-    const pathname = `media/relax-audio/${file}`
-    const validUntil = Date.now() + AUDIO_URL_TTL_MS
-    try {
-      const signed = await issueSignedToken({ pathname, operations: ['get'], validUntil })
-      const { presignedUrl } = await presignUrl(
-        {
-          clientSigningToken: signed.clientSigningToken,
-          delegationToken: signed.delegationToken,
-        },
-        { operation: 'get', pathname, access: 'private', validUntil, useCache: false },
-      )
-      return res.status(200).json({ success: true, url: presignedUrl })
-    } catch (error) {
-      console.error('[miniprogram] audio url sign failed:', error)
-      return res.status(500).json({ error: '音频地址生成失败，请稍后重试' })
-    }
+    if (!resolveRelaxAudioFile(audioId)) return res.status(400).json({ error: '无效音频' })
+    const exp = Date.now() + AUDIO_URL_TTL_MS
+    return res.status(200).json({ success: true, url: buildAudioStreamUrl(audioId, exp) })
   }
 
   const planId = proxyRequest?.planId ?? requestedPlanId
