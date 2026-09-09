@@ -17,9 +17,9 @@ import {
   parseVirtualPaymentProxyPlanId,
   queryVirtualPaymentOrder,
 } from './pay/_virtual-payment.js'
-import { resolveRelaxAudioFile, signAudioUrl } from './_signed.js'
+import { issueSignedToken, presignUrl } from '@vercel/blob'
+import { resolveRelaxAudioFile } from './_signed.js'
 
-const AUDIO_URL_ORIGIN = process.env.AUDIO_URL_ORIGIN?.replace(/\/+$/, '') || 'https://wuxingme.cn'
 const AUDIO_URL_TTL_MS = Number(process.env.AUDIO_URL_TTL_MS || 60 * 60 * 1000)
 
 function getShanghaiDateKey(now = new Date()): string {
@@ -223,9 +223,22 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     const audioId = typeof req.body?.audioId === 'string' ? req.body.audioId.trim() : ''
     const file = resolveRelaxAudioFile(audioId)
     if (!file) return res.status(400).json({ error: '无效音频' })
-    const exp = Date.now() + AUDIO_URL_TTL_MS
-    const url = `${AUDIO_URL_ORIGIN}/api/audio?file=${encodeURIComponent(file)}&exp=${exp}&sig=${signAudioUrl(file, exp)}`
-    return res.status(200).json({ success: true, url })
+    const pathname = `media/relax-audio/${file}`
+    const validUntil = Date.now() + AUDIO_URL_TTL_MS
+    try {
+      const signed = await issueSignedToken({ pathname, operations: ['get'], validUntil })
+      const { presignedUrl } = await presignUrl(
+        {
+          clientSigningToken: signed.clientSigningToken,
+          delegationToken: signed.delegationToken,
+        },
+        { operation: 'get', pathname, access: 'private', validUntil, useCache: false },
+      )
+      return res.status(200).json({ success: true, url: presignedUrl })
+    } catch (error) {
+      console.error('[miniprogram] audio url sign failed:', error)
+      return res.status(500).json({ error: '音频地址生成失败，请稍后重试' })
+    }
   }
 
   const planId = proxyRequest?.planId ?? requestedPlanId

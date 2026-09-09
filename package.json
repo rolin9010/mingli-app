@@ -11,6 +11,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.3",
+    "@vercel/blob": "^2.8.0",
     "astronomy-engine": "^2.1.19",
     "iztro": "^2.4.4",
     "lunar-javascript": "^1.7.7",

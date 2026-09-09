@@ -1,25 +1,3 @@
-import { createHmac, timingSafeEqual } from 'crypto'
-
-export function getAudioSignSecret(): string {
-  const secret = process.env.AUDIO_SIGN_SECRET?.trim()
-  if (!secret) throw new Error('缺少 AUDIO_SIGN_SECRET')
-  return secret
-}
-
-export function signAudioUrl(file: string, exp: number): string {
-  return createHmac('sha256', getAudioSignSecret())
-    .update(`${file}&${exp}`)
-    .digest('hex')
-}
-
-export function verifyAudioSig(file: string, exp: number, sig: string): boolean {
-  const expected = signAudioUrl(file, exp)
-  const a = Buffer.from(sig)
-  const b = Buffer.from(expected)
-  if (a.length !== b.length) return false
-  return timingSafeEqual(a, b)
-}
-
 export const RELAX_AUDIO_FILES: Record<string, string> = {
   'training-modes': '放松准备与三种训练模式.m4a',
   'female-guidance': '放松引导女声30分钟.m4a',
