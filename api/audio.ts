@@ -1,7 +1,7 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createReadStream, existsSync, statSync } from 'fs'
 import { basename, join } from 'path'
-import { verifyAudioSig } from './audio/_signed'
+import { verifyAudioSig } from './audio/_signed.js'
 
 const AUDIO_DIR = join(__dirname, '..', 'media', 'relax-audio')
 const MIME = 'audio/mp4'
