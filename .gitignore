@@ -29,3 +29,6 @@ dist/
 
 .vercel
 package-lock.json
+
+# local audio backup
+.audio_orig/

@@ -17,6 +17,10 @@ import {
   parseVirtualPaymentProxyPlanId,
   queryVirtualPaymentOrder,
 } from './pay/_virtual-payment.js'
+import { resolveRelaxAudioFile, signAudioUrl } from './audio/_signed.js'
+
+const AUDIO_URL_ORIGIN = process.env.AUDIO_URL_ORIGIN?.replace(/\/+$/, '') || 'https://wuxingme.cn'
+const AUDIO_URL_TTL_MS = Number(process.env.AUDIO_URL_TTL_MS || 60 * 60 * 1000)
 
 function getShanghaiDateKey(now = new Date()): string {
   return new Intl.DateTimeFormat('en-CA', {
@@ -210,6 +214,18 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       hasUsedTrial,
       needsBinding: false,
     })
+  }
+
+  if (action === 'audioUrl') {
+    if (!active) {
+      return res.status(403).json({ error: '需开通松眠会员才能畅听放松音频' })
+    }
+    const audioId = typeof req.body?.audioId === 'string' ? req.body.audioId.trim() : ''
+    const file = resolveRelaxAudioFile(audioId)
+    if (!file) return res.status(400).json({ error: '无效音频' })
+    const exp = Date.now() + AUDIO_URL_TTL_MS
+    const url = `${AUDIO_URL_ORIGIN}/api/audio?file=${encodeURIComponent(file)}&exp=${exp}&sig=${signAudioUrl(file, exp)}`
+    return res.status(200).json({ success: true, url })
   }
 
   const planId = proxyRequest?.planId ?? requestedPlanId
