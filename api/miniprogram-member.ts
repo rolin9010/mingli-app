@@ -17,7 +17,7 @@ import {
   parseVirtualPaymentProxyPlanId,
   queryVirtualPaymentOrder,
 } from './pay/_virtual-payment.js'
-import { resolveRelaxAudioFile, signAudioUrl } from './audio/_signed.js'
+import { resolveRelaxAudioFile, signAudioUrl } from './_signed.js'
 
 const AUDIO_URL_ORIGIN = process.env.AUDIO_URL_ORIGIN?.replace(/\/+$/, '') || 'https://wuxingme.cn'
 const AUDIO_URL_TTL_MS = Number(process.env.AUDIO_URL_TTL_MS || 60 * 60 * 1000)
