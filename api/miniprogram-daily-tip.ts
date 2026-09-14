@@ -755,6 +755,51 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
   const supabase = createClient(supabaseUrl, serviceKey, { auth: { persistSession: false } })
   const today = getShanghaiToday()
 
+  // 仅返回基础特征（五行分布 / 主气标签），会员与否都能取（用于小贴士引导区）
+  if (req.body?.action === 'tipBasics') {
+    if (!openid) return res.status(200).json({ success: true, hasBasics: false })
+    const { data: binding } = await supabase
+      .from('user_bindings')
+      .select('user_id')
+      .eq('wechat_openid', openid)
+      .maybeSingle()
+    if (!binding?.user_id) return res.status(200).json({ success: true, hasBasics: false })
+
+    const { data: profileRow } = await supabase
+      .from('daily_tip_profiles')
+      .select('elements,updated_at')
+      .eq('user_id', binding.user_id)
+      .maybeSingle()
+    let profile = normalizeProfile(profileRow as Record<string, unknown> | null)
+
+    if (!profile) {
+      const { data: reading } = await supabase
+        .from('readings')
+        .select('bazi_summary,created_at')
+        .eq('user_id', binding.user_id)
+        .order('is_primary', { ascending: false })
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      const summary = reading?.bazi_summary as Record<string, unknown> | undefined
+      profile = normalizeProfile(reading ? { elements: summary?.elements, updated_at: reading.created_at } : null)
+    }
+
+    if (!profile) return res.status(200).json({ success: true, hasBasics: false })
+
+    const meta = buildPersonalTipMeta(profile.elements, today)
+    return res.status(200).json({
+      success: true,
+      hasBasics: true,
+      basics: {
+        elements: profile.elements,
+        primaryLabel: meta.primaryLabel,
+        supportLabel: meta.supportLabel,
+        profileSummary: meta.profileSummary,
+      },
+    })
+  }
+
   const getCached = async (cacheKey: string) => {
     const { data } = await supabase.from('daily_tip_cache').select('content').eq('cache_key', cacheKey).maybeSingle()
     return data?.content as string | undefined
