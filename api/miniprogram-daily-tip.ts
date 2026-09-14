@@ -792,7 +792,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       success: true,
       hasBasics: true,
       basics: {
-        elements: profile.elements,
+        elements: profile.elements.map((item) => ({
+          element: item.element,
+          label: ELEMENT_PRESENTATION[item.element as ElementName]?.label || item.element,
+          percent: item.percent,
+        })),
         primaryLabel: meta.primaryLabel,
         supportLabel: meta.supportLabel,
         profileSummary: meta.profileSummary,
