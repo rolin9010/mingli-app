@@ -38,6 +38,13 @@ export function resolveRelaxAudioFile(audioId: string): string | null {
   return RELAX_AUDIO_FILES[audioId] || null
 }
 
+// 免费试听（非会员也可播放）的放松音频 id
+export const FREE_RELAX_AUDIO_IDS = new Set<string>(['training-modes'])
+
+export function isFreeRelaxAudio(audioId: string): boolean {
+  return FREE_RELAX_AUDIO_IDS.has(audioId)
+}
+
 export function getRelaxAudioBlobPath(audioId: string): string | null {
   const file = resolveRelaxAudioFile(audioId)
   return file ? `media/relax-audio/${file}` : null
