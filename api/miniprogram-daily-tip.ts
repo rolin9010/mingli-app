@@ -637,7 +637,7 @@ export function buildPublicSongmianTip(today: ReturnType<typeof getShanghaiToday
     : `当前处于${today.solarTerm}节气阶段，距离${today.nextSolarTerm}约${today.daysUntilNextTerm}天`
   const quickPractice = plan.practice.split('。').slice(0, 2).filter(Boolean).join('。')
   const nightReminder = plan.night.split('。')[0]
-  return `今日时令\n${today.season}，${termStage}。${plan.rhythm}\n\n3分钟通用练习\n今天可以从${plan.method}开始：${quickPractice}。做到身体稳定、呼吸自然即可。\n\n今夜一句\n${nightReminder}。会员版会再结合个人节律，给出今日影响、主练习、补足动作与完整睡前方案。`
+  return `今日时令\n${today.season}，${termStage}。${plan.rhythm}\n\n3分钟通用练习\n今天可以从${plan.method}开始：${quickPractice}。做到身体稳定、呼吸自然即可。\n\n今夜一句\n${nightReminder}。`
 }
 
 export function sanitizeDailyTip(content: string) {
