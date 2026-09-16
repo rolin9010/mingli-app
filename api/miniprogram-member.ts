@@ -21,7 +21,10 @@ import {
 import { get } from '@vercel/blob'
 import { buildAudioStreamUrl, getRelaxAudioBlobPath, isFreeRelaxAudio, resolveRelaxAudioFile, verifyAudioSig } from './_signed.js'
 
-const AUDIO_URL_TTL_MS = Number(process.env.AUDIO_URL_TTL_MS || 60 * 60 * 1000)
+// 音频签名地址有效期：默认 12 小时。
+// 宽松一些是为了覆盖「暂停后再续播 / 循环播放 / 隔一段时间再回来」这些场景，
+// 避免在会话中途因签名过期（403）而断播。
+const AUDIO_URL_TTL_MS = Number(process.env.AUDIO_URL_TTL_MS || 12 * 60 * 60 * 1000)
 
 export const config = { maxDuration: 60 }
 
