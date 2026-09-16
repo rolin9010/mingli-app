@@ -1,5 +1,6 @@
 import type { VercelRequest, VercelResponse } from '@vercel/node'
 import { createClient, type SupabaseClient } from '@supabase/supabase-js'
+import { Readable } from 'stream'
 import { authorizeMiniProgramProxy } from './_miniprogram-auth.js'
 import { userHasActiveMembership } from './_membership-access.js'
 import {
@@ -22,17 +23,7 @@ import { buildAudioStreamUrl, getRelaxAudioBlobPath, isFreeRelaxAudio, resolveRe
 
 const AUDIO_URL_TTL_MS = Number(process.env.AUDIO_URL_TTL_MS || 60 * 60 * 1000)
 
-function parseRange(range: string | undefined, size: number): { start: number; end: number } {
-  if (!range) return { start: 0, end: size - 1 }
-  const match = /bytes=(\d*)-(\d*)/.exec(range)
-  if (!match) return { start: 0, end: size - 1 }
-  const start = match[1] ? parseInt(match[1], 10) : 0
-  const end = match[2] ? parseInt(match[2], 10) : size - 1
-  return {
-    start: Math.min(start, size - 1),
-    end: Math.min(end, size - 1),
-  }
-}
+export const config = { maxDuration: 60 }
 
 async function handleAudioStream(req: VercelRequest, res: VercelResponse) {
   const fileId = String(req.query?.file || '')
@@ -48,23 +39,32 @@ async function handleAudioStream(req: VercelRequest, res: VercelResponse) {
 
   try {
     const token = process.env.BLOB_READ_WRITE_TOKEN || ''
-    const result = await get(pathname, { token, access: 'private' })
-    if (result.statusCode !== 200) return res.status(500).json({ error: '音频加载失败' })
-
-    const buf = Buffer.from(await new Response(result.stream).arrayBuffer())
-    const size = buf.length
     const rangeHeader = typeof req.headers.range === 'string' ? req.headers.range : undefined
-    const { start, end } = parseRange(rangeHeader, size)
-    const partial = !!rangeHeader
+    const options: { token: string; access: 'private'; headers?: Record<string, string> } = {
+      token,
+      access: 'private',
+    }
+    if (rangeHeader) options.headers = { Range: rangeHeader }
 
-    if (start > end) return res.status(416).json({ error: 'RANGE' })
+    // Forward the Range request to Blob so only the needed bytes are fetched,
+    // then stream the response through instead of buffering the whole file.
+    const result = await get(pathname, options)
+    if (result.statusCode !== 200 || !result.stream) {
+      return res.status(500).json({ error: '音频加载失败' })
+    }
+
+    const contentRange = result.headers?.get?.('content-range') || ''
+    const contentLength = result.headers?.get?.('content-length') || ''
+    const partial = !!rangeHeader && !!contentRange
+
     res.status(partial ? 206 : 200)
     res.setHeader('Content-Type', result.blob.contentType || 'audio/mp4')
     res.setHeader('Accept-Ranges', 'bytes')
     res.setHeader('Cache-Control', 'no-store')
-    if (partial) res.setHeader('Content-Range', `bytes ${start}-${end}/${size}`)
-    res.setHeader('Content-Length', end - start + 1)
-    res.send(buf.subarray(start, end + 1))
+    if (contentRange) res.setHeader('Content-Range', contentRange)
+    if (contentLength) res.setHeader('Content-Length', contentLength)
+
+    Readable.fromWeb(result.stream as Parameters<typeof Readable.fromWeb>[0]).pipe(res)
   } catch (error) {
     console.error('[miniprogram] audio stream failed:', error)
     if (!res.headersSent) return res.status(500).json({ error: '音频加载失败' })
