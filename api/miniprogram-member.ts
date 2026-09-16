@@ -211,6 +211,14 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
         needsBinding: true,
       })
     }
+    // 免费试听：未绑定/未登录用户也可获取免费曲的播放地址
+    if (action === 'audioUrl') {
+      const freeAudioId = typeof req.body?.audioId === 'string' ? req.body.audioId.trim() : ''
+      if (resolveRelaxAudioFile(freeAudioId) && isFreeRelaxAudio(freeAudioId)) {
+        const exp = Date.now() + AUDIO_URL_TTL_MS
+        return res.status(200).json({ success: true, url: buildAudioStreamUrl(freeAudioId, exp) })
+      }
+    }
     return res.status(409).json({ error: '请先开通或关联元气文化账号' })
   }
 
