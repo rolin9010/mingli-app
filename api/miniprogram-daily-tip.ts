@@ -765,24 +765,26 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .maybeSingle()
     if (!binding?.user_id) return res.status(200).json({ success: true, hasBasics: false })
 
-    const { data: profileRow } = await supabase
-      .from('daily_tip_profiles')
-      .select('elements,updated_at')
+    // 「我的档案 / 我的五行」：以主档案（readings.bazi_summary）为准——它与网站同一套算法、
+    // 按用户输入算好的占比；daily_tip_profiles 只作为兜底。
+    const { data: reading } = await supabase
+      .from('readings')
+      .select('bazi_summary,created_at')
       .eq('user_id', binding.user_id)
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle()
-    let profile = normalizeProfile(profileRow as Record<string, unknown> | null)
+    const summary = reading?.bazi_summary as Record<string, unknown> | undefined
+    let profile = normalizeProfile(reading ? { elements: summary?.elements, updated_at: reading.created_at } : null)
 
     if (!profile) {
-      const { data: reading } = await supabase
-        .from('readings')
-        .select('bazi_summary,created_at')
+      const { data: profileRow } = await supabase
+        .from('daily_tip_profiles')
+        .select('elements,updated_at')
         .eq('user_id', binding.user_id)
-        .order('is_primary', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(1)
         .maybeSingle()
-      const summary = reading?.bazi_summary as Record<string, unknown> | undefined
-      profile = normalizeProfile(reading ? { elements: summary?.elements, updated_at: reading.created_at } : null)
+      profile = normalizeProfile(profileRow as Record<string, unknown> | null)
     }
 
     if (!profile) return res.status(200).json({ success: true, hasBasics: false })
@@ -853,33 +855,35 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
       .maybeSingle()
     if (!membership) return res.status(403).json({ error: 'NOT_MEMBER', message: '需要有效会员才能阅读完整松眠小贴士' })
 
-    const { data: profileRow } = await supabase
-      .from('daily_tip_profiles')
-      .select('name,gender,birth,calendar_type,elements,pillars,updated_at')
+    // 「我的档案 / 我的五行」：以主档案（readings.bazi_summary，与网站同一套算法）为准，
+    // daily_tip_profiles 作为兜底，避免用到旧档案。
+    const { data: reading } = await supabase
+      .from('readings')
+      .select('name,input_data,bazi_summary,created_at')
       .eq('user_id', binding.user_id)
+      .order('is_primary', { ascending: false })
+      .order('created_at', { ascending: false })
+      .limit(1)
       .maybeSingle()
-    let profile = normalizeProfile(profileRow as Record<string, unknown> | null)
+    const input = reading?.input_data as Record<string, unknown> | undefined
+    const summary = reading?.bazi_summary as Record<string, unknown> | undefined
+    let profile = normalizeProfile(reading ? {
+      name: reading.name ?? input?.name,
+      gender: input?.gender,
+      birth: input?.birth,
+      calendar_type: input?.calendarType,
+      elements: summary?.elements,
+      pillars: summary?.pillars,
+      updated_at: reading.created_at,
+    } : null)
 
     if (!profile) {
-      const { data: reading } = await supabase
-        .from('readings')
-        .select('name,input_data,bazi_summary,created_at')
+      const { data: profileRow } = await supabase
+        .from('daily_tip_profiles')
+        .select('name,gender,birth,calendar_type,elements,pillars,updated_at')
         .eq('user_id', binding.user_id)
-        .order('is_primary', { ascending: false })
-        .order('created_at', { ascending: false })
-        .limit(1)
         .maybeSingle()
-      const input = reading?.input_data as Record<string, unknown> | undefined
-      const summary = reading?.bazi_summary as Record<string, unknown> | undefined
-      profile = normalizeProfile(reading ? {
-        name: reading.name ?? input?.name,
-        gender: input?.gender,
-        birth: input?.birth,
-        calendar_type: input?.calendarType,
-        elements: summary?.elements,
-        pillars: summary?.pillars,
-        updated_at: reading.created_at,
-      } : null)
+      profile = normalizeProfile(profileRow as Record<string, unknown> | null)
     }
 
     if (!profile) {
