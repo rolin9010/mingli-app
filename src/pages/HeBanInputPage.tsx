@@ -83,13 +83,27 @@ function Modal({ title, onClose, children }: { title: string; onClose: () => voi
 function PickerColumn<T extends string | number>({ items, value, onChange, format }: { items: T[]; value: T; onChange: (v: T) => void; format?: (v: T) => string }) {
   const listRef = useRef<HTMLUListElement>(null)
   const itemH = 40
+  const isScrolling = useRef(false)
+  const scrollTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   useEffect(() => {
+    if (isScrolling.current) return
     const idx = items.indexOf(value)
     if (idx >= 0 && listRef.current) listRef.current.scrollTo({ top: idx * itemH, behavior: 'smooth' })
   }, [value, items])
+  useEffect(() => () => { if (scrollTimer.current) clearTimeout(scrollTimer.current) }, [])
   return (
-    <ul ref={listRef} className="flex-1 overflow-y-auto overscroll-contain" style={{ height: itemH * 3, scrollSnapType: 'y mandatory' }}
-      onScroll={(e) => { const idx = Math.round(e.currentTarget.scrollTop / itemH); const c = Math.max(0, Math.min(items.length - 1, idx)); if (items[c] !== value) onChange(items[c]) }}>
+    <ul ref={listRef} className="flex-1 overflow-y-auto overscroll-contain" style={{ height: itemH * 3, scrollSnapType: 'y mandatory', WebkitOverflowScrolling: 'touch' }}
+      onScroll={(e) => {
+        const el = e.currentTarget
+        isScrolling.current = true
+        if (scrollTimer.current) clearTimeout(scrollTimer.current)
+        scrollTimer.current = setTimeout(() => {
+          isScrolling.current = false
+          const idx = Math.round(el.scrollTop / itemH)
+          const c = Math.max(0, Math.min(items.length - 1, idx))
+          if (items[c] !== value) onChange(items[c])
+        }, 120)
+      }}>
       <li style={{ height: itemH }} />
       {items.map((item) => (
         <li key={String(item)} style={{ height: itemH, scrollSnapAlign: 'center' }}
@@ -111,18 +125,44 @@ function BirthTimePicker({ birth, onChange, onClose }: { birth: BirthDateInput; 
   const update = (patch: Partial<BirthDateInput>) => setLocal(prev => { const next = { ...prev, ...patch }; const md = getDaysInMonth(next.year, next.month); if (next.day > md) next.day = md; return next })
   return (
     <Modal title="选择出生时间" onClose={onClose}>
-      <div className="mb-3 flex gap-1 text-center text-xs text-slate-400">
-        <div className="flex-1">年</div><div className="flex-1">月</div><div className="flex-1">日</div><div className="flex-1">时</div><div className="flex-1">分</div>
+      <div className="grid grid-cols-3 gap-2">
+        <label>
+          <span className="mb-1 block text-xs text-slate-400">年</span>
+          <select className="w-full rounded-xl border border-white/10 bg-slate-800 px-2 py-2 text-sm text-slate-100 outline-none focus:border-amber-400/40"
+            value={local.year} onChange={(e) => update({ year: Number(e.target.value) })}>
+            {years.map((y) => <option key={y} value={y}>{y}</option>)}
+          </select>
+        </label>
+        <label>
+          <span className="mb-1 block text-xs text-slate-400">月</span>
+          <select className="w-full rounded-xl border border-white/10 bg-slate-800 px-2 py-2 text-sm text-slate-100 outline-none focus:border-amber-400/40"
+            value={local.month} onChange={(e) => update({ month: Number(e.target.value) })}>
+            {months.map((m) => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </label>
+        <label>
+          <span className="mb-1 block text-xs text-slate-400">日</span>
+          <select className="w-full rounded-xl border border-white/10 bg-slate-800 px-2 py-2 text-sm text-slate-100 outline-none focus:border-amber-400/40"
+            value={local.day} onChange={(e) => update({ day: Number(e.target.value) })}>
+            {days.map((d) => <option key={d} value={d}>{d}</option>)}
+          </select>
+        </label>
       </div>
-      <div className="relative">
-        <div className="pointer-events-none absolute inset-x-0 top-[40px] h-[40px] rounded-lg border-y border-amber-400/30 bg-amber-400/5" />
-        <div className="flex gap-1">
-          <PickerColumn items={years} value={local.year} onChange={v => update({ year: v })} format={v => String(v)} />
-          <PickerColumn items={months} value={local.month} onChange={v => update({ month: v })} />
-          <PickerColumn items={days} value={local.day} onChange={v => update({ day: v })} />
-          <PickerColumn items={hours} value={local.hour} onChange={v => update({ hour: v })} />
-          <PickerColumn items={minutes} value={local.minute ?? 0} onChange={v => update({ minute: v })} />
-        </div>
+      <div className="mt-2 grid grid-cols-2 gap-2">
+        <label>
+          <span className="mb-1 block text-xs text-slate-400">时（0-23）</span>
+          <select className="w-full rounded-xl border border-white/10 bg-slate-800 px-2 py-2 text-sm text-slate-100 outline-none focus:border-amber-400/40"
+            value={local.hour} onChange={(e) => update({ hour: Number(e.target.value) })}>
+            {hours.map((h) => <option key={h} value={h}>{String(h).padStart(2, '0')} 时</option>)}
+          </select>
+        </label>
+        <label>
+          <span className="mb-1 block text-xs text-slate-400">分</span>
+          <select className="w-full rounded-xl border border-white/10 bg-slate-800 px-2 py-2 text-sm text-slate-100 outline-none focus:border-amber-400/40"
+            value={local.minute ?? 0} onChange={(e) => update({ minute: Number(e.target.value) })}>
+            {minutes.map((mi) => <option key={mi} value={mi}>{String(mi).padStart(2, '0')} 分</option>)}
+          </select>
+        </label>
       </div>
       <button onClick={() => { onChange(local); onClose() }} className="mt-4 w-full rounded-xl bg-amber-400/20 border border-amber-400/40 py-2.5 text-sm font-semibold text-amber-100 hover:bg-amber-400/30 transition">确认</button>
     </Modal>
