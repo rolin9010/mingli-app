@@ -32,6 +32,11 @@ export const RELAX_AUDIO_FILES: Record<string, string> = {
   'throat-relaxation': 'throat-relaxation.m4a',
   'low-mood-relaxation': 'low-mood-relaxation.m4a',
   'starship-sleep': 'starship-sleep.m4a',
+  'anxiety-advanced-clean': 'anxiety-advanced-clean.m4a',
+  'anxiety-advanced-music': 'anxiety-advanced-music.m4a',
+  'anxiety-body-release': 'anxiety-body-release.m4a',
+  'standing-guidance': 'standing-guidance.m4a',
+  'seated-relaxation': 'seated-relaxation.m4a',
 }
 
 export function resolveRelaxAudioFile(audioId: string): string | null {
@@ -39,7 +44,7 @@ export function resolveRelaxAudioFile(audioId: string): string | null {
 }
 
 // 免费试听（非会员也可播放）的放松音频 id
-export const FREE_RELAX_AUDIO_IDS = new Set<string>(['training-modes'])
+export const FREE_RELAX_AUDIO_IDS = new Set<string>(['seated-relaxation'])
 
 export function isFreeRelaxAudio(audioId: string): boolean {
   return FREE_RELAX_AUDIO_IDS.has(audioId)

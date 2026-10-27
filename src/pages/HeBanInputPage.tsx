@@ -5,6 +5,7 @@ import Card from '../components/Card'
 import { IconSparkle } from '../components/icons'
 import { getReadings, getReading, isHeBanInputData, type ReadingListItem } from '../lib/history'
 import { supabase } from '../lib/supabase'
+import { BIRTH_YEARS } from '../lib/birthDateOptions'
 
 // ── 关系类型 ──────────────────────────────────────────────────────
 const RELATION_OPTIONS: { key: HeBanRelationType; label: string; icon: string }[] = [
@@ -37,7 +38,7 @@ const locationData: Record<string, Record<string, string[]>> = {
 }
 
 const countries = ['中国', '美国', '英国', '日本', '韩国', '加拿大', '澳大利亚', '新加坡', '马来西亚', '其他']
-const years = Array.from({ length: 120 }, (_, i) => 2025 - i)
+const years = BIRTH_YEARS
 const months = Array.from({ length: 12 }, (_, i) => i + 1)
 const hours = Array.from({ length: 24 }, (_, i) => i)
 const minutes = Array.from({ length: 60 }, (_, i) => i)

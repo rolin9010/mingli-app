@@ -7,6 +7,7 @@ import { IconSparkle } from '../components/icons'
 import { getReadings, type ReadingListItem } from '../lib/history'
 import { supabase } from '../lib/supabase'
 import { saveDailyTipProfile } from '../lib/dailyTipProfile'
+import { BIRTH_YEARS } from '../lib/birthDateOptions'
 
 /**
  * 可选排盘体系；与 Step2 `switch (sysKey)` 对齐。
@@ -239,7 +240,7 @@ const locationData: Record<string, Record<string, string[]>> = {
 }
 
 // ── 年/月/日/时/分 选项 ───────────────────────────────────────────
-const years = Array.from({ length: 120 }, (_, i) => 2025 - i)  // 2025 ~ 1906
+const years = BIRTH_YEARS
 const months = Array.from({ length: 12 }, (_, i) => i + 1)
 const hours = Array.from({ length: 24 }, (_, i) => i)
 const minutes = Array.from({ length: 60 }, (_, i) => i)
