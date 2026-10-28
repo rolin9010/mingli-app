@@ -34,7 +34,7 @@ export default function MiniSessionPage() {
     void (async () => {
       try {
         // 通过同域 API 兑换，避免微信 WebView 直接请求 Supabase Auth 的兼容性问题。
-        const response = await fetch('/api/miniprogram-session', {
+        const response = await fetch('/api/miniprogram-readings?action=session', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ token_hash: tokenHash, type }),
