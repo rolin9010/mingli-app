@@ -1,12 +1,19 @@
 import { useEffect, useState } from 'react'
 import type { EmailOtpType } from '@supabase/supabase-js'
 import { supabase } from '../lib/supabase'
+import { isReadOnlyMiniProgramHistoryPath } from '../lib/miniProgramEntry'
 
 const ALLOWED_TYPES = new Set<EmailOtpType>(['magiclink', 'email'])
 
-function safeNextPath(value: string | null) {
+function safeNextPath(value: string | null): string {
   if (!value || !value.startsWith('/') || value.startsWith('//')) return '/?miniprogram=1'
-  return value
+  try {
+    const url = new URL(value, window.location.origin)
+    if (url.origin !== window.location.origin) return '/?miniprogram=1'
+    return `${url.pathname}${url.search}`
+  } catch {
+    return '/?miniprogram=1'
+  }
 }
 
 export default function MiniSessionPage() {
@@ -24,13 +31,47 @@ export default function MiniSessionPage() {
       return
     }
 
-    void supabase.auth.verifyOtp({ token_hash: tokenHash, type }).then(({ error }) => {
-      if (error) {
-        setMessage('连接链接已失效，请返回小程序重新打开')
+    void (async () => {
+      try {
+        // 通过同域 API 兑换，避免微信 WebView 直接请求 Supabase Auth 的兼容性问题。
+        const response = await fetch('/api/miniprogram-session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token_hash: tokenHash, type }),
+        })
+        const payload = await response.json().catch(() => ({})) as {
+          access_token?: string
+          refresh_token?: string
+          errorCode?: string
+        }
+
+        if (response.ok && payload.access_token && payload.refresh_token) {
+          const { error } = await supabase.auth.setSession({
+            access_token: payload.access_token,
+            refresh_token: payload.refresh_token,
+          })
+          if (!error) {
+            window.location.replace(next)
+            return
+          }
+          console.warn('miniprogram-session setSession failed:', error.code || error.name)
+        } else {
+          console.warn('miniprogram-session exchange failed:', payload.errorCode || response.status)
+        }
+      } catch (error) {
+        console.warn(
+          'miniprogram-session request failed:',
+          error instanceof Error ? error.name : 'unknown',
+        )
+      }
+
+      // 历史档案允许只读访问；登录兑换异常时仍让用户看到已有档案。
+      if (isReadOnlyMiniProgramHistoryPath(next)) {
+        window.location.replace(next)
         return
       }
-      window.location.replace(next)
-    })
+      setMessage('连接链接已失效，请返回小程序重新打开')
+    })()
   }, [])
 
   return (

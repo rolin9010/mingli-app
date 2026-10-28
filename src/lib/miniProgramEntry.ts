@@ -10,6 +10,19 @@ export function buildMiniProgramMeasurementUrl(showOnboarding = false): string {
   return showOnboarding ? '/?miniprogram=1&onboarding=1' : '/?miniprogram=1'
 }
 
+export function isReadOnlyMiniProgramHistoryPath(path: string): boolean {
+  try {
+    const url = new URL(path, 'https://wuxingme.cn')
+    if (url.origin !== 'https://wuxingme.cn') return false
+    const params = url.searchParams
+    return params.get('miniprogram') === '1'
+      && params.get('view') === 'history'
+      && Boolean(params.get('uid'))
+  } catch {
+    return false
+  }
+}
+
 /**
  * 小程序会在一次性登录后带着绑定用户 id 打开历史页。
  * 仅当当前 Supabase 会话与该 id 一致时开放修改、删除与积分操作。
