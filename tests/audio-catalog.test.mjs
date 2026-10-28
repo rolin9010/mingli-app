@@ -8,6 +8,7 @@ import {
 
 test('the member audio proxy allows all relax audio IDs used by the mini program', () => {
   const expectedIds = [
+    'seated-relaxation',
     'training-modes',
     'female-guidance',
     'deep-relaxation-fire',
@@ -21,7 +22,6 @@ test('the member audio proxy allows all relax audio IDs used by the mini program
     'anxiety-advanced-music',
     'anxiety-body-release',
     'standing-guidance',
-    'seated-relaxation',
   ]
 
   assert.deepEqual(Object.keys(RELAX_AUDIO_FILES), expectedIds)

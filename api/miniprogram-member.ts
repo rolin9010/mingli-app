@@ -19,7 +19,7 @@ import {
   queryVirtualPaymentOrder,
 } from './pay/_virtual-payment.js'
 import { get } from '@vercel/blob'
-import { buildAudioStreamUrl, getRelaxAudioBlobPath, isFreeRelaxAudio, resolveRelaxAudioFile, verifyAudioSig } from './_signed.js'
+import { RELAX_AUDIO_CATALOG, buildAudioStreamUrl, getRelaxAudioBlobPath, isFreeRelaxAudio, resolveRelaxAudioFile, verifyAudioSig } from './_signed.js'
 
 // 音频签名地址有效期：默认 12 小时。
 // 宽松一些是为了覆盖「暂停后再续播 / 循环播放 / 隔一段时间再回来」这些场景，
@@ -193,6 +193,11 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     : null
   const action = (proxyRequest?.action ?? requestedAction) || 'status'
   if (!openid) return res.status(400).json({ error: 'Missing openid' })
+
+  // 放松音频清单：后端下发，新增音频无需小程序发版
+  if (action === 'relaxAudioList') {
+    return res.status(200).json({ success: true, audios: RELAX_AUDIO_CATALOG })
+  }
 
   const { data: binding, error: bindingError } = await supabase
     .from('user_bindings')
