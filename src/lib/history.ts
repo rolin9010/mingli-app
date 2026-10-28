@@ -10,6 +10,8 @@ export type ReadingListItem = {
   input_data?: UserInput | HeBanUserInput | null
   /** 非空字符串表示已有 AI 解读 */
   ai_report?: string | null
+  /** 小程序列表接口只返回摘要，不传输完整解读 */
+  has_ai_report?: boolean
 }
 
 export type ReadingDetail = {
@@ -289,4 +291,14 @@ export async function getReadingsForMiniprogram(uid: string): Promise<ReadingLis
   if (!res.ok) throw new Error(`API error: ${res.status}`)
   const json = await res.json() as { readings: ReadingListItem[] }
   return json.readings ?? []
+}
+
+/** 小程序访客模式：按需获取单条档案及完整解读。 */
+export async function getReadingForMiniprogram(uid: string, readingId: string): Promise<ReadingDetail> {
+  const params = new URLSearchParams({ uid, reading_id: readingId })
+  const res = await fetch(`/api/miniprogram-readings?${params.toString()}`)
+  if (!res.ok) throw new Error(`API error: ${res.status}`)
+  const json = await res.json() as { reading?: ReadingDetail }
+  if (!json.reading) throw new Error('记录未找到')
+  return json.reading
 }

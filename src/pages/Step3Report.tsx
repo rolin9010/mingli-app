@@ -149,6 +149,7 @@ export default function Step3Report({
   }, [readMode, reportFingerprint])
 
   useEffect(() => {
+    if (new URLSearchParams(window.location.search).get('miniprogram') === '1') return
     const id = 'mingli-font-noto-serif-sc'
     if (document.getElementById(id)) return
     const link = document.createElement('link')

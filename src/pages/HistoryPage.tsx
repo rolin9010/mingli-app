@@ -44,6 +44,7 @@ import {
   deleteReading,
   generateBindingCode,
   getReading,
+  getReadingForMiniprogram,
   getReadings,
   getReadingsForMiniprogram,
   isHeBanInputData,
@@ -203,7 +204,8 @@ export default function HistoryPage({
   const [list, setList] = useState<ReadingListItem[] | null>(null)
   const [loading, setLoading] = useState(true)
   const [listError, setListError] = useState('')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
+  // 小程序直达时立即并行加载首条详情，不再等列表返回后才发起第二个请求。
+  const [selectedId, setSelectedId] = useState<string | null>(initialSelectedId || null)
   const [detail, setDetail] = useState<ReadingDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
   const [detailError, setDetailError] = useState('')
@@ -263,6 +265,7 @@ export default function HistoryPage({
   const isHeBan = useMemo(() => isHeBanInputData(detail?.input_data ?? null), [detail?.input_data])
 
   useEffect(() => {
+    if (embeddedInMiniprogram) return
     const id = 'mingli-font-noto-serif-sc'
     if (document.getElementById(id)) return
     const link = document.createElement('link')
@@ -271,7 +274,7 @@ export default function HistoryPage({
     link.href =
       'https://fonts.googleapis.com/css2?family=Noto+Serif+SC:wght@200;600;700&display=swap'
     document.head.appendChild(link)
-  }, [])
+  }, [embeddedInMiniprogram])
 
   useEffect(() => {
     let cancelled = false
@@ -321,25 +324,15 @@ export default function HistoryPage({
       return
     }
 
-    // 访客模式：数据已在 list 里（API 返回了完整字段），直接从 list 取
-    if (isGuest) {
-      const row = list?.find(r => r.id === selectedId)
-      if (row) {
-        setDetail(row as unknown as ReadingDetail)
-        setNameInput(row.name ?? '')
-      } else {
-        setDetailError('记录未找到')
-      }
-      setDetailLoading(false)
-      return
-    }
-
     let cancelled = false
+    setDetail(null)
     setDetailLoading(true)
     setDetailError('')
     void (async () => {
       try {
-        const row = await getReading(selectedId)
+        const row = isGuest
+          ? await getReadingForMiniprogram(guestUid ?? '', selectedId)
+          : await getReading(selectedId)
         if (!cancelled) {
           setDetail(row)
           setNameInput(row.name ?? '')
@@ -355,7 +348,7 @@ export default function HistoryPage({
     return () => {
       cancelled = true
     }
-  }, [selectedId, isGuest, list])
+  }, [selectedId, isGuest, guestUid])
 
   // 单人排盘计算
   useEffect(() => {
@@ -944,15 +937,15 @@ export default function HistoryPage({
                             ★ 我的五行
                           </span>
                         )}
-                        {row.ai_report ? (
+                        {row.has_ai_report === true || row.ai_report ? (
                           <span className="shrink-0 rounded-full bg-emerald-400/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300 leading-none">
                             已解读
                           </span>
-                        ) : (
+                        ) : row.has_ai_report === false ? (
                           <span className="shrink-0 rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] font-medium text-slate-500 leading-none">
                             未解读
                           </span>
-                        )}
+                        ) : null}
                       </div>
                       <span className="shrink-0 text-[11px] text-slate-500">{updatedAt}</span>
                     </div>

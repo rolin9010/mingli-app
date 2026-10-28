@@ -561,6 +561,7 @@ function WizardApp({ user }: { user: User | null }) {
 export default function App() {
   const [user, setUser] = useState<User | null>(null)
   const [authChecked, setAuthChecked] = useState(false)
+  const isMiniProgramRoute = new URLSearchParams(window.location.search).get('miniprogram') === '1'
 
   useEffect(() => {
     let mounted = true
@@ -598,7 +599,7 @@ export default function App() {
           path="/"
           element={
             <PrivateRoute>
-              {authChecked ? <WizardApp user={user} /> : <AuthLoading />}
+              {isMiniProgramRoute || authChecked ? <WizardApp user={user} /> : <AuthLoading />}
             </PrivateRoute>
           }
         />

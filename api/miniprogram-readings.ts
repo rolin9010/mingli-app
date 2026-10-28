@@ -96,9 +96,34 @@ export default async function handler(req: VercelRequest, res: VercelResponse) {
     auth: { persistSession: false },
   })
 
+  const readingId = typeof req.query.reading_id === 'string' ? req.query.reading_id.trim() : ''
+  if (readingId) {
+    if (!/^[0-9a-f-]{32,40}$/i.test(readingId)) {
+      return res.status(400).json({ error: 'Invalid reading_id format' })
+    }
+
+    const { data, error } = await supabase
+      .from('readings')
+      .select('id,user_id,name,birth_date,created_at,input_data,ai_report,is_primary')
+      .eq('user_id', uid)
+      .eq('id', readingId)
+      .maybeSingle()
+
+    if (error) {
+      console.error('miniprogram-reading detail error:', error)
+      return res.status(500).json({ error: 'Database error' })
+    }
+    if (!data) return res.status(404).json({ error: 'Reading not found' })
+
+    res.setHeader('Access-Control-Allow-Origin', '*')
+    res.setHeader('Cache-Control', 'no-store')
+    return res.status(200).json({ reading: data })
+  }
+
+  // 列表只返回轻量摘要；完整 AI 解读按需单独加载，避免首屏传输多份大文本。
   const { data, error } = await supabase
     .from('readings')
-    .select('id, name, birth_date, created_at, input_data, ai_report, is_primary')
+    .select('id,name,birth_date,created_at,input_data,is_primary')
     .eq('user_id', uid)
     .order('created_at', { ascending: false })
     .limit(30)
